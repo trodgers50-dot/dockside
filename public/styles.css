@@ -1076,6 +1076,13 @@ body::before {
 }
 .detail-schedule .lbl { color: var(--text-muted); }
 .detail-schedule .val { font-weight: 650; text-align: right; }
+.detail-schedule .schedule-source {
+  margin: 10px 0 0;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+  text-align: left;
+}
 
 .howto-block {
   background: var(--card);

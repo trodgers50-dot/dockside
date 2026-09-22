@@ -69,7 +69,7 @@ Soft Pro teaser on Guides and Parts: “Pro unlocks full guide library + smarter
 
 **Trailer (8):** Hub bearings / grease · Tire pressure & tread · Lights & wiring · Winch & strap · Coupler / safety chains · Brakes (if applicable) · Leaf springs / suspension · Wheel bearings service
 
-Each seeded task includes `steps[]` (3–6 DIY steps) and `parts[]` (`id`, `name`, `why`, Amazon search `url`). On load, older localStorage missing steps/parts is merged from the catalog by task title.
+Each seeded task includes `steps[]` (DIY how-tos), torque/tools/warnings where relevant, and `parts[]` (`id`, `name`, `why`, Amazon search `url`). Intervals use `SCHEDULE_CATALOG` (typical OEM days/hours + human schedule labels). On load, `migrateData` refreshes guide bodies and **re-aligns `intervalDays` / `intervalHours`** from the catalog by title (does not reset `lastDoneAt`).
 
 Last-done dates are staggered so the dashboard shows overdue, due-soon, and upcoming items on first open.
 
@@ -85,7 +85,8 @@ Settings → **Export JSON**. **Import JSON** restores on the same or another br
 - Shop buttons use curated marine Amazon search queries (gear-aware make/model when set).
 - Affiliate-ready: set `AMAZON_ASSOCIATE_TAG` in `app.js` when Amazon Associates is approved; empty tag keeps clean search URLs (no empty `tag=`).
 - Browser **Reminders** (opt-in): Notifications API nudges for overdue / due-soon jobs when the tab loads, becomes visible, or on a light interval while open. Defaults off; Gear / Settings → Reminders. No email/SMS/server push.
-- Build id: `v1-reminders` (see `BUILD` in `app.js`).
+- Build id: `v1-oem-intervals` (see `BUILD` in `app.js`).
+- Service intervals follow **typical OEM hours-or-calendar** patterns (Yamaha/Mercury/Honda-style when both apply). Always verify your engine/trailer service manual for year/model — Dockside does not claim exact OEM for your serial.
 
 ## License
 

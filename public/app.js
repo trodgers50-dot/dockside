@@ -9,7 +9,7 @@
   const STORAGE_KEY = "boatTrailerMaint.v1";
   const DUE_SOON_DAYS = 14;
 
-  const BUILD = "v1-reminders";
+  const BUILD = "v1-oem-intervals";
 
   // Amazon Associates tag — set when approved (e.g. "dockside-20"); leave empty until then.
   const AMAZON_ASSOCIATE_TAG = "";
@@ -654,10 +654,29 @@
   }
 
   function intervalLabel(task) {
+    const sch = SCHEDULE_CATALOG[task.title];
+    if (sch && sch.scheduleLabel) return sch.scheduleLabel;
     const parts = [];
-    if (task.intervalDays) parts.push(`Every ${task.intervalDays} days`);
+    if (task.intervalDays === 1) parts.push("Every launch / daily when in use");
+    else if (task.intervalDays) parts.push(`Every ${task.intervalDays} days`);
     if (task.intervalHours) parts.push(`Every ${task.intervalHours} hrs`);
     return parts.join(" · ") || "As needed";
+  }
+
+  function scheduleNoteFor(task, asset) {
+    const sch = SCHEDULE_CATALOG[task.title];
+    if (!sch) return "";
+    const base = sch.scheduleSource || "Typical manufacturer schedule — confirm in your engine/trailer manual.";
+    const boat = asset && asset.type === "boat" ? asset : getBoat();
+    const trailer = asset && asset.type === "trailer" ? asset : getTrailer();
+    const engineTasks = ["Engine oil & filter", "Lower unit / gearcase oil", "Impeller / water pump", "Fuel filter / water separator", "Battery & connections"];
+    if (boat && boat.engineMakeModel && engineTasks.includes(task.title)) {
+      return `Verify in your ${boat.engineMakeModel} manual. ${base}`;
+    }
+    if (trailer && trailer.makeModel && asset && asset.type === "trailer") {
+      return `Verify in your ${trailer.makeModel} manual. ${base}`;
+    }
+    return base;
   }
 
   function part(id, name, why, search) {
@@ -665,7 +684,114 @@
   }
 
 
-// Catalog of how-to + parts keyed by task title (for seed + migration)
+// OEM-typical service intervals (hours OR calendar, whichever comes first when both set).
+  // Labels are typical manufacturer-style — always verify the OEM service manual for year/model.
+  const SCHEDULE_CATALOG = {
+    "Engine oil & filter": {
+      intervalDays: 365,
+      intervalHours: 100,
+      scheduleLabel: "Every 100 engine hours or yearly",
+      scheduleSource: "Typical Yamaha/Mercury/Honda-style schedule — verify your OEM service manual for year/model.",
+    },
+    "Lower unit / gearcase oil": {
+      intervalDays: 365,
+      intervalHours: 100,
+      scheduleLabel: "Every 100 engine hours or yearly",
+      scheduleSource: "Typical annual / 100-hr gearcase service (Yamaha-style). Salt or severe use may call for ~6 months — verify OEM; Honda often lists more aggressive intervals.",
+    },
+    "Impeller / water pump": {
+      intervalDays: 730,
+      intervalHours: 300,
+      scheduleLabel: "Every 300 hrs or ~2 years",
+      scheduleSource: "Typical inspect annually; replace ~2–3 years / ~200–300 hrs — verify OEM for your pump.",
+    },
+    "Fuel filter / water separator": {
+      intervalDays: 365,
+      intervalHours: 100,
+      scheduleLabel: "Every 100 hrs or yearly",
+      scheduleSource: "Typical primary/in-line separator ~100 hrs or yearly. Many 10-micron elements call for ~50 hrs — check your filter rating and OEM bulletin.",
+    },
+    "Battery & connections": {
+      intervalDays: 30,
+      intervalHours: null,
+      scheduleLabel: "Monthly / each-use check",
+      scheduleSource: "Typical OEM ‘check battery & cables’ cadence — inspect before trips and monthly in season.",
+    },
+    "Zincs / anodes": {
+      intervalDays: 90,
+      intervalHours: null,
+      scheduleLabel: "Quarterly inspect",
+      scheduleSource: "Inspect often; replace at ~50% consumed — salt water may need more frequent checks.",
+    },
+    "Hull wash & wax": {
+      intervalDays: 90,
+      intervalHours: null,
+      scheduleLabel: "Every 90 days (seasonal care)",
+      scheduleSource: "Care schedule (not a strict OEM engine interval) — adjust for water type and usage.",
+    },
+    "Winterize / dewinterize": {
+      intervalDays: 365,
+      intervalHours: null,
+      scheduleLabel: "Yearly (seasonal)",
+      scheduleSource: "Annual seasonal service — follow your OEM winterize / spring commissioning bulletin.",
+    },
+    "Drain plugs check": {
+      intervalDays: 1,
+      intervalHours: null,
+      scheduleLabel: "Every launch / daily when in use",
+      scheduleSource: "Pre-launch check — confirm plugs before every launch, not just on a calendar.",
+    },
+    "Hub bearings / grease": {
+      intervalDays: 365,
+      intervalHours: null,
+      scheduleLabel: "Yearly (inspect after submersion)",
+      scheduleSource: "Typical trailer annual service pack. Inspect after any water submersion; repack at least annually — verify axle/hub maker guidance.",
+    },
+    "Tire pressure & tread": {
+      intervalDays: 30,
+      intervalHours: null,
+      scheduleLabel: "Monthly / before trips",
+      scheduleSource: "Check cold PSI and tread before trips and at least monthly in season.",
+    },
+    "Lights & wiring": {
+      intervalDays: 30,
+      intervalHours: null,
+      scheduleLabel: "Monthly / before trips",
+      scheduleSource: "Verify lights and connector before trips — a common roadside failure point.",
+    },
+    "Winch & strap": {
+      intervalDays: 90,
+      intervalHours: null,
+      scheduleLabel: "Quarterly inspect",
+      scheduleSource: "Inspect strap/cable wear and winch function seasonally / quarterly.",
+    },
+    "Coupler / safety chains": {
+      intervalDays: 30,
+      intervalHours: null,
+      scheduleLabel: "Monthly / before trips",
+      scheduleSource: "Latch, lock, and crossed chains — check before every tow; monthly reminder keeps it on the radar.",
+    },
+    "Brakes (if applicable)": {
+      intervalDays: 365,
+      intervalHours: null,
+      scheduleLabel: "Yearly inspect / adjust",
+      scheduleSource: "Typical annual inspect/adjust for surge or electric trailer brakes — verify brake maker guidance.",
+    },
+    "Leaf springs / suspension": {
+      intervalDays: 365,
+      intervalHours: null,
+      scheduleLabel: "Yearly inspect",
+      scheduleSource: "Annual check of U-bolts, bushings, and spring condition — more often with heavy use.",
+    },
+    "Wheel bearings service": {
+      intervalDays: 365,
+      intervalHours: null,
+      scheduleLabel: "Yearly full service",
+      scheduleSource: "Full pack/replace annually alongside hub grease/inspect. Inspect sooner after submersion or heat/noise.",
+    },
+  };
+
+  // Catalog of how-to + parts keyed by task title (for seed + migration)
   // Torque/specs are typical published ranges — always verify in OEM service manual.
   const GUIDE_CATALOG = {
     "Engine oil & filter": {
@@ -1338,26 +1464,26 @@
     ];
 
     const boatTasks = [
-      { title: "Engine oil & filter", category: "Engine", intervalDays: 100, intervalHours: 100, lastDoneAt: daysAgo(70), priority: "high", notes: "Change oil and filter; check for leaks." },
-      { title: "Lower unit / gearcase oil", category: "Engine", intervalDays: 180, intervalHours: null, lastDoneAt: daysAgo(120), priority: "high", notes: "Inspect for milky oil (water intrusion)." },
-      { title: "Impeller / water pump", category: "Cooling", intervalDays: 365, intervalHours: 200, lastDoneAt: daysAgo(300), priority: "high", notes: "Replace impeller; inspect housing & gaskets." },
-      { title: "Fuel filter / water separator", category: "Fuel", intervalDays: 180, intervalHours: null, lastDoneAt: daysAgo(175), priority: "medium", notes: "Drain water bowl; replace filter element." },
-      { title: "Battery & connections", category: "Electrical", intervalDays: 90, intervalHours: null, lastDoneAt: daysAgo(60), priority: "medium", notes: "Clean terminals; check voltage & charge." },
-      { title: "Zincs / anodes", category: "Hull", intervalDays: 180, intervalHours: null, lastDoneAt: daysAgo(90), priority: "medium", notes: "Replace when ~50% consumed." },
+      { title: "Engine oil & filter", category: "Engine", intervalDays: 365, intervalHours: 100, lastDoneAt: daysAgo(70), priority: "high", notes: "Change oil and filter; check for leaks. Typical: 100 hrs or annually (after break-in)." },
+      { title: "Lower unit / gearcase oil", category: "Engine", intervalDays: 365, intervalHours: 100, lastDoneAt: daysAgo(120), priority: "high", notes: "Inspect for milky oil (water intrusion). Typical: 100 hrs or yearly; salt/severe use may be ~6 mo." },
+      { title: "Impeller / water pump", category: "Cooling", intervalDays: 730, intervalHours: 300, lastDoneAt: daysAgo(300), priority: "high", notes: "Replace impeller; inspect housing & gaskets. Typical: ~2 years / 300 hrs (inspect annually)." },
+      { title: "Fuel filter / water separator", category: "Fuel", intervalDays: 365, intervalHours: 100, lastDoneAt: daysAgo(175), priority: "medium", notes: "Drain water bowl; replace filter element. Typical main separator: 100 hrs or yearly; 10-micron often ~50 hrs." },
+      { title: "Battery & connections", category: "Electrical", intervalDays: 30, intervalHours: null, lastDoneAt: daysAgo(20), priority: "medium", notes: "Clean terminals; check voltage & charge. Monthly / each-use check." },
+      { title: "Zincs / anodes", category: "Hull", intervalDays: 90, intervalHours: null, lastDoneAt: daysAgo(45), priority: "medium", notes: "Replace when ~50% consumed. Quarterly inspect." },
       { title: "Hull wash & wax", category: "Hull", intervalDays: 90, intervalHours: null, lastDoneAt: daysAgo(45), priority: "low", notes: "Wash, rinse, wax above waterline." },
       { title: "Winterize / dewinterize", category: "Seasonal", intervalDays: 365, intervalHours: null, lastDoneAt: daysAgo(200), priority: "high", notes: "Antifreeze, fogging, batteries, covers." },
-      { title: "Drain plugs check", category: "Pre-launch", intervalDays: 30, intervalHours: null, lastDoneAt: daysAgo(28), priority: "high", notes: "Verify drain plugs installed before launch." },
+      { title: "Drain plugs check", category: "Pre-launch", intervalDays: 1, intervalHours: null, lastDoneAt: daysAgo(1), priority: "high", notes: "Before every launch — verify drain plugs installed." },
     ];
 
     const trailerTasks = [
-      { title: "Hub bearings / grease", category: "Axles", intervalDays: 180, intervalHours: null, lastDoneAt: daysAgo(160), priority: "high", notes: "Repack bearings; check for play & heat after tow." },
-      { title: "Tire pressure & tread", category: "Tires", intervalDays: 30, intervalHours: null, lastDoneAt: daysAgo(20), priority: "high", notes: "Inflate to sidewall PSI cold; check spare." },
-      { title: "Lights & wiring", category: "Electrical", intervalDays: 60, intervalHours: null, lastDoneAt: daysAgo(55), priority: "high", notes: "Tail, brake, turn, marker lights; check connector." },
+      { title: "Hub bearings / grease", category: "Axles", intervalDays: 365, intervalHours: null, lastDoneAt: daysAgo(160), priority: "high", notes: "Inspect after any submersion; repack at least annually. Check for play & heat after tow." },
+      { title: "Tire pressure & tread", category: "Tires", intervalDays: 30, intervalHours: null, lastDoneAt: daysAgo(20), priority: "high", notes: "Inflate to sidewall PSI cold; check spare. Before trips / monthly." },
+      { title: "Lights & wiring", category: "Electrical", intervalDays: 30, intervalHours: null, lastDoneAt: daysAgo(20), priority: "high", notes: "Tail, brake, turn, marker lights; check connector. Before trips / monthly." },
       { title: "Winch & strap", category: "Winch", intervalDays: 90, intervalHours: null, lastDoneAt: daysAgo(40), priority: "medium", notes: "Inspect strap/cable wear; lubricate winch." },
-      { title: "Coupler / safety chains", category: "Hitch", intervalDays: 90, intervalHours: null, lastDoneAt: daysAgo(50), priority: "high", notes: "Latch, lock, chains crossed under hitch." },
-      { title: "Brakes (if applicable)", category: "Brakes", intervalDays: 180, intervalHours: null, lastDoneAt: daysAgo(100), priority: "high", notes: "Surge or electric brakes; adjust & inspect pads." },
-      { title: "Leaf springs / suspension", category: "Suspension", intervalDays: 180, intervalHours: null, lastDoneAt: daysAgo(150), priority: "medium", notes: "Check U-bolts, bushings, spring cracks." },
-      { title: "Wheel bearings service", category: "Axles", intervalDays: 365, intervalHours: null, lastDoneAt: daysAgo(340), priority: "high", notes: "Full service interval reminder — pack or replace." },
+      { title: "Coupler / safety chains", category: "Hitch", intervalDays: 30, intervalHours: null, lastDoneAt: daysAgo(20), priority: "high", notes: "Latch, lock, chains crossed under hitch. Before trips / monthly." },
+      { title: "Brakes (if applicable)", category: "Brakes", intervalDays: 365, intervalHours: null, lastDoneAt: daysAgo(100), priority: "high", notes: "Surge or electric brakes; annual inspect & adjust pads." },
+      { title: "Leaf springs / suspension", category: "Suspension", intervalDays: 365, intervalHours: null, lastDoneAt: daysAgo(150), priority: "medium", notes: "Check U-bolts, bushings, spring cracks — annual inspect." },
+      { title: "Wheel bearings service", category: "Axles", intervalDays: 365, intervalHours: null, lastDoneAt: daysAgo(340), priority: "high", notes: "Full service annually — pack or replace; inspect sooner after submersion." },
     ];
 
     const tasks = [
@@ -1413,6 +1539,16 @@
       changed = true;
     }
     data.tasks.forEach((t) => {
+      const sch = SCHEDULE_CATALOG[t.title];
+      if (sch) {
+        const nextDays = sch.intervalDays != null ? sch.intervalDays : null;
+        const nextHours = sch.intervalHours != null ? sch.intervalHours : null;
+        if (t.intervalDays !== nextDays || t.intervalHours !== nextHours) {
+          t.intervalDays = nextDays;
+          t.intervalHours = nextHours;
+          changed = true;
+        }
+      }
       const cat = GUIDE_CATALOG[t.title];
       const before = cat
         ? JSON.stringify({
@@ -2983,6 +3119,7 @@
           <div class="row"><span class="lbl">Schedule</span><span class="val">${escapeHtml(intervalLabel(task))}</span></div>
           <div class="row"><span class="lbl">Last done</span><span class="val">${task.lastDoneAt ? escapeHtml(task.lastDoneAt.slice(0, 10)) : "Never"}</span></div>
           <div class="row"><span class="lbl">Next due</span><span class="val">${due ? escapeHtml(due) : "—"}</span></div>
+          ${SCHEDULE_CATALOG[task.title] ? `<p class="schedule-source">${escapeHtml(scheduleNoteFor(task, asset))}</p>` : ""}
         </div>
         ${task.notes ? `<div class="task-notes" style="margin-bottom:0">${escapeHtml(task.notes)}</div>` : ""}
         <div class="cta-row" style="margin-top:14px;margin-bottom:0">
