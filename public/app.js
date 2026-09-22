@@ -9,7 +9,7 @@
   const STORAGE_KEY = "boatTrailerMaint.v1";
   const DUE_SOON_DAYS = 14;
 
-  const BUILD = "v1-home";
+  const BUILD = "v1-parts-match";
 
 
   const ICON_ANCHOR = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2c-1.1 0-2 .7-2 1.8V5c-3 .5-5 2.2-5 5.2 0 1.2.4 2.3 1.2 3.1L5 21h2.5l1.1-4.2c1.1.4 2.2.6 3.4.6s2.3-.2 3.4-.6L16.5 21H19l-1.2-5.7c.8-.8 1.2-1.9 1.2-3.1 0-3-2-4.7-5-5.2V3.8C14 2.7 13.1 2 12 2zm0 6.2c2.2 0 3.5 1 3.5 2.5S14.2 13.2 12 13.2 8.5 12.2 8.5 10.7 9.8 8.2 12 8.2z"/></svg>`;
@@ -174,6 +174,175 @@
     return tasks.filter((t) => taskRelevantForGear(t, boat, trailer));
   }
 
+  /** Catalog id without the per-task suffix appended in enrichFromCatalog. */
+  function partBaseId(part) {
+    if (!part || !part.id) return "";
+    const id = String(part.id);
+    const idx = id.lastIndexOf("_");
+    if (idx > 0 && id.length - idx - 1 === 6) return id.slice(0, idx);
+    return id;
+  }
+
+  function cleanEngineSizeLabel(label) {
+    if (!label) return "";
+    let size = String(label).replace(/ HP$/i, "hp").replace(/ kW$/i, "kW");
+    if (/^\d/.test(size) && !/hp$/i.test(size) && !/kW$/i.test(size)) size += "hp";
+    return size;
+  }
+
+  function shortEngineTypeLabel(engineType) {
+    const eng = engineTypeLabel(engineType);
+    return eng.replace(" / I/O", "").replace(" / sail only", "").toLowerCase();
+  }
+
+  const ENGINE_PART_BASE_IDS = new Set([
+    "oil-filter",
+    "engine-oil",
+    "oil-drain-pan",
+    "crush-washers",
+    "gear-oil",
+    "gear-oil-pump",
+    "drain-gaskets",
+    "impeller",
+    "pump-gasket",
+    "impeller-grease",
+    "fuel-filter",
+    "fuel-filter-wrench",
+    "fogging-oil",
+    "fuel-stabilizer",
+    "outdrive-anode",
+  ]);
+
+  const OUTBOARD_LOWER_PART_IDS = new Set([
+    "gear-oil",
+    "gear-oil-pump",
+    "drain-gaskets",
+  ]);
+
+  function partRelevantForGear(part, task, boat, trailer) {
+    const engineType = boat?.engineType || "";
+    const trailerType = trailer?.trailerType || "";
+    const baseId = partBaseId(part);
+    const blob = `${part?.name || ""} ${part?.search || ""}`.toLowerCase();
+
+    // Electric / no engine: hide fuel, oil, impeller, fogging, gearcase, outdrive anodes
+    if (engineType === "none" || engineType === "electric") {
+      if (ENGINE_PART_BASE_IDS.has(baseId)) return false;
+      if (
+        /\b(fogging|fuel filter|oil filter|gear.?oil|impeller|outdrive anode|lower unit)\b/.test(
+          blob
+        )
+      ) {
+        return false;
+      }
+    }
+
+    // Inboard / jet: no outboard lower-unit or outdrive-specific parts
+    if (engineType === "inboard" || engineType === "jet") {
+      if (OUTBOARD_LOWER_PART_IDS.has(baseId)) return false;
+      if (baseId === "outdrive-anode") return false;
+      if (/\boutdrive anode\b/.test(blob)) return false;
+    }
+
+    // Pure outboard: hide sterndrive-only outdrive anode kits (shaft zinc still shows)
+    if (engineType === "outboard") {
+      if (baseId === "outdrive-anode") return false;
+    }
+
+    // Trailer none: skip trailer-ish parts if somehow attached to visible tasks
+    if (trailerType === "none" && task) {
+      const isTrailerHeavy = TRAILER_HEAVY_TITLES.includes(task.title);
+      if (isTrailerHeavy) return false;
+    }
+
+    // PWC: task filter already drops heavy trailer jobs; double-check brake/bearing kits
+    if (trailerType === "pwc" && task) {
+      if (
+        task.title === "Brakes (if applicable)" ||
+        task.title === "Leaf springs / suspension" ||
+        task.title === "Wheel bearings service"
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  function engineSearchPrefix(boat) {
+    if (!boat) return "";
+    if (boat.engineMakeModel) return String(boat.engineMakeModel).trim();
+    if (boat.engineType && boat.engineType !== "none") {
+      const size = cleanEngineSizeLabel(boat.engineSizeLabel);
+      const type = shortEngineTypeLabel(boat.engineType);
+      if (size && type) return `${size} ${type}`;
+      if (type) return type;
+    }
+    if (boat.makeModel) return String(boat.makeModel).trim();
+    if (boat.boatType) return boatTypeLabel(boat.boatType);
+    return "";
+  }
+
+  function trailerSearchPrefix(trailer) {
+    if (!trailer) return "";
+    if (trailer.makeModel) return String(trailer.makeModel).trim();
+    if (trailer.trailerType && trailer.trailerType !== "none") {
+      return trailerTypeLabel(trailer.trailerType);
+    }
+    return "";
+  }
+
+  function boatPartsSectionTitle(boat) {
+    if (!boat) return "For your boat";
+    const bits = [];
+    if (boat.makeModel) bits.push(boat.makeModel);
+    else if (boat.boatType) bits.push(boatTypeLabel(boat.boatType));
+    if (boat.engineMakeModel) {
+      bits.push(boat.engineMakeModel);
+    } else if (boat.engineType && boat.engineType !== "none" && boat.engineType !== "electric") {
+      const size = cleanEngineSizeLabel(boat.engineSizeLabel);
+      const type = shortEngineTypeLabel(boat.engineType);
+      const engBit = [size, type].filter(Boolean).join(" ");
+      if (engBit) bits.push(engBit);
+    }
+    if (bits.length) return `For your ${bits.join(" · ")}`;
+    return "For your boat";
+  }
+
+  function trailerPartsSectionTitle(trailer) {
+    if (!trailer) return "For your trailer";
+    if (trailer.makeModel) return `For your ${trailer.makeModel}`;
+    if (trailer.trailerType && trailer.trailerType !== "none") {
+      return `For your ${trailerTypeLabel(trailer.trailerType)}`;
+    }
+    return "For your trailer";
+  }
+
+  function partFitLabel(part, asset) {
+    if (needsSetup(state)) return "";
+    const boat = getBoat();
+    const trailer = getTrailer();
+    if (asset && asset.type === "trailer") {
+      if (trailer?.makeModel) return `For your ${trailer.makeModel}`;
+      if (trailer?.trailerType && trailer.trailerType !== "none") {
+        return `For your ${trailerTypeLabel(trailer.trailerType)}`;
+      }
+      return "";
+    }
+    // Boat / engine parts — prefer engine identity when an engine exists
+    if (boat?.engineMakeModel) return `Fits your ${boat.engineMakeModel}`;
+    if (boat?.engineType && boat.engineType !== "none" && boat.engineType !== "electric") {
+      const size = cleanEngineSizeLabel(boat.engineSizeLabel);
+      const type = shortEngineTypeLabel(boat.engineType);
+      if (size && type) return `For your ${size} ${type}`;
+      if (type) return `For your ${type}`;
+    }
+    if (boat?.makeModel) return `For your ${boat.makeModel}`;
+    if (boat?.boatType) return `For your ${boatTypeLabel(boat.boatType)}`;
+    return "";
+  }
+
+
   function optionsHTML(list, selected) {
     return list
       .map(
@@ -216,21 +385,65 @@
     return (part && part.name) || "";
   }
 
-  function buyUrlForPart(part, asset) {
-    const base = partSearchQuery(part);
+  function typeAwarePartSearch(part, boat) {
+    let base = partSearchQuery(part);
+    const engineType = boat?.engineType || "";
+    const baseId = partBaseId(part);
+    if (!engineType || engineType === "none" || engineType === "electric") return base;
+
+    if (engineType === "outboard") {
+      if (baseId === "oil-filter" && !/outboard/i.test(base)) base = "outboard oil filter";
+      else if (baseId === "impeller" && !/outboard/i.test(base)) base = "outboard impeller kit";
+      else if (baseId === "pump-gasket" && !/outboard/i.test(base)) base = "outboard water pump gasket kit";
+      else if (baseId === "gear-oil" && !/outboard|lower unit/i.test(base)) base = "outboard lower unit gear oil";
+    } else if (engineType === "sterndrive") {
+      if (baseId === "impeller" && !/sterndrive|outdrive/i.test(base)) base = "sterndrive impeller kit";
+      else if (baseId === "oil-filter" && !/sterndrive|marine/i.test(base)) base = "marine sterndrive oil filter";
+    } else if (engineType === "inboard") {
+      if (baseId === "oil-filter") base = "marine inboard oil filter";
+      else if (baseId === "impeller") base = "inboard raw water pump impeller";
+      else if (baseId === "pump-gasket") base = "raw water pump gasket kit";
+    } else if (engineType === "jet") {
+      if (baseId === "oil-filter") base = "jet boat marine oil filter";
+      else if (baseId === "impeller") base = "jet boat impeller kit";
+      else if (baseId === "pump-gasket") base = "jet pump gasket kit";
+    }
+    return base;
+  }
+
+  function gearAwarePartSearch(part, asset) {
     const boat = getBoat();
     const trailer = getTrailer();
+    let base = typeAwarePartSearch(part, boat);
+
     let prefix = "";
     if (asset && asset.type === "trailer") {
-      prefix = (trailer && trailer.makeModel) || "";
+      prefix = trailerSearchPrefix(trailer);
     } else {
-      prefix =
-        (boat && boat.engineMakeModel) ||
-        (boat && boat.makeModel) ||
-        "";
+      prefix = engineSearchPrefix(boat);
     }
-    const q = prefix ? (prefix + " " + base).trim() : base;
-    return amazonSearch(q);
+
+    if (!prefix) return base;
+
+    const prefixLower = prefix.toLowerCase();
+    const baseLower = base.toLowerCase();
+    // Avoid double-prefixing when make/model already appears in the part search
+    if (baseLower.includes(prefixLower)) return base;
+    // Also skip if the significant token (e.g. "Yamaha F150") words are already present
+    const tokens = prefixLower.split(/\s+/).filter((t) => t.length > 2);
+    if (tokens.length && tokens.every((t) => baseLower.includes(t))) return base;
+
+    const q = (prefix + " " + base).trim();
+    // Keep shoppable — trim very long queries
+    if (q.length > 90) {
+      const shortBase = base.length > 40 ? base.slice(0, 40).trim() : base;
+      return (prefix + " " + shortBase).trim().slice(0, 90);
+    }
+    return q;
+  }
+
+  function buyUrlForPart(part, asset) {
+    return amazonSearch(gearAwarePartSearch(part, asset));
   }
 
   function affiliateNoteHTML() {
@@ -1650,21 +1863,26 @@
     return parts.join("");
   }
 
-  function partsListHTML(parts, asset) {
-    if (!parts || !parts.length) {
+  function partsListHTML(parts, asset, task) {
+    const boat = getBoat();
+    const trailer = getTrailer();
+    const filtered = (parts || []).filter((p) => partRelevantForGear(p, task || null, boat, trailer));
+    if (!filtered.length) {
       return `<p style="font-size:0.85rem;color:var(--text-muted)">No parts listed for this job yet.</p>`;
     }
-    const rows = parts
-      .map(
-        (p) => `
+    const rows = filtered
+      .map((p) => {
+        const fit = partFitLabel(p, asset);
+        return `
       <div class="part-row">
         <div class="part-info">
           <div class="part-name">${escapeHtml(p.name)}</div>
           <div class="part-why">${escapeHtml(p.why)}</div>
+          ${fit ? `<div class="part-fit">${escapeHtml(fit)}</div>` : ""}
         </div>
         <a class="btn btn-buy" href="${escapeAttr(buyUrlForPart(p, asset))}" target="_blank" rel="noopener noreferrer">Shop</a>
-      </div>`
-      )
+      </div>`;
+      })
       .join("");
     return rows + affiliateNoteHTML();
   }
@@ -2047,6 +2265,7 @@
   function renderParts() {
     const incomplete = needsSetup(state);
     const boat = getBoat();
+    const trailer = getTrailer();
     const byAsset = {};
     state.assets.forEach((a) => {
       byAsset[a.id] = [];
@@ -2054,21 +2273,44 @@
 
     visibleTasks(state.tasks).forEach((t) => {
       (t.parts || []).forEach((pt) => {
+        if (!partRelevantForGear(pt, t, boat, trailer)) return;
         const bucket = byAsset[t.assetId] || (byAsset[t.assetId] = []);
+        const baseId = partBaseId(pt);
+        const existingIdx = bucket.findIndex((row) => partBaseId(row.part) === baseId);
+        if (existingIdx >= 0) {
+          const existing = bucket[existingIdx];
+          const newIsEngine = ENGINE_TASK_TITLES.includes(t.title);
+          const oldIsEngine = ENGINE_TASK_TITLES.includes(existing.task.title);
+          // Prefer engine-task association when the same catalog part appears twice
+          if (newIsEngine && !oldIsEngine) bucket[existingIdx] = { part: pt, task: t };
+          return;
+        }
         bucket.push({ part: pt, task: t });
       });
     });
 
     let engineHeader = "Parts for your boat";
     if (!incomplete && boat) {
-      const size = boat.engineSizeLabel || "";
-      const eng =
-        boat.engineMakeModel ||
-        (boat.engineType && boat.engineType !== "none" ? engineTypeLabel(boat.engineType) : "");
-      if (size || eng) {
-        engineHeader = `Parts for your ${[size, eng].filter(Boolean).join(" ")}`.trim();
-      } else if (boat.makeModel) {
-        engineHeader = `Parts for your ${boat.makeModel}`;
+      if (boat.engineType === "none") {
+        if (boat.makeModel) engineHeader = `Parts for your ${boat.makeModel}`;
+        else if (boat.boatType) engineHeader = `Parts for your ${boatTypeLabel(boat.boatType)}`;
+        else engineHeader = "Parts for your boat";
+      } else if (boat.engineType === "electric") {
+        const size = cleanEngineSizeLabel(boat.engineSizeLabel);
+        if (boat.engineMakeModel) engineHeader = `Parts for your ${boat.engineMakeModel}`;
+        else if (size) engineHeader = `Parts for your ${size} electric`;
+        else if (boat.makeModel) engineHeader = `Parts for your ${boat.makeModel}`;
+        else engineHeader = "Parts for your boat";
+      } else if (boat.engineMakeModel) {
+        engineHeader = `Parts for your ${boat.engineMakeModel}`;
+      } else {
+        const size = cleanEngineSizeLabel(boat.engineSizeLabel);
+        const eng = boat.engineType ? shortEngineTypeLabel(boat.engineType) : "";
+        if (size || eng) {
+          engineHeader = `Parts for your ${[size, eng].filter(Boolean).join(" ")}`.trim();
+        } else if (boat.makeModel) {
+          engineHeader = `Parts for your ${boat.makeModel}`;
+        }
       }
     }
 
@@ -2078,22 +2320,25 @@
         const items = byAsset[a.id] || [];
         total += items.length;
         if (!items.length) return "";
-        const sectionTitle =
-          a.type === "boat" ? "For your boat" : a.type === "trailer" ? "For your trailer" : a.name;
+        let sectionTitle = a.name;
+        if (a.type === "boat") sectionTitle = incomplete ? "For your boat" : boatPartsSectionTitle(boat);
+        else if (a.type === "trailer") sectionTitle = incomplete ? "For your trailer" : trailerPartsSectionTitle(trailer);
         return `
           <div class="section-label">${escapeHtml(sectionTitle)} <span class="count">${items.length}</span></div>
           ${items
-            .map(
-              (row) => `
+            .map((row) => {
+              const fit = partFitLabel(row.part, a);
+              return `
             <div class="part-row">
               <div class="part-info">
                 <div class="part-name">${escapeHtml(row.part.name)}</div>
                 <div class="part-why">${escapeHtml(row.part.why)}</div>
+                ${fit ? `<div class="part-fit">${escapeHtml(fit)}</div>` : ""}
                 <div class="part-task">${escapeHtml(row.task.title)}</div>
               </div>
               <a class="btn btn-buy" href="${escapeAttr(buyUrlForPart(row.part, a))}" target="_blank" rel="noopener noreferrer">Shop</a>
-            </div>`
-            )
+            </div>`;
+            })
             .join("")}`;
       })
       .join("");
@@ -2337,7 +2582,7 @@
 
       <div class="parts-block shop-block">
         <h3><span class="sec-mark">Buy</span> Shop parts for this job</h3>
-        ${partsListHTML(parts, asset)}
+        ${partsListHTML(parts, asset, task)}
       </div>
     `;
   }

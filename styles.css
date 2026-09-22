@@ -1027,6 +1027,13 @@ body::before {
   margin-top: 4px;
   line-height: 1.35;
 }
+.part-row .part-fit {
+  font-size: 0.72rem;
+  color: var(--seafoam);
+  margin-top: 4px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
 .part-row .part-task {
   font-size: 0.68rem;
   color: var(--text-dim);
@@ -1761,6 +1768,13 @@ body::before {
   color: var(--text-muted);
   margin-top: 4px;
   line-height: 1.35;
+}
+.part-row .part-fit {
+  font-size: 0.72rem;
+  color: var(--seafoam);
+  margin-top: 4px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 .part-row .part-task {
   font-size: 0.68rem;
