@@ -379,7 +379,8 @@ body {
   color: var(--rose);
   border-color: rgba(251, 113, 133, 0.35);
 }
-.btn-shop {
+.btn-shop,
+.btn-buy {
   background: var(--teal-bg);
   color: var(--teal);
   border-color: var(--teal-dim);
@@ -387,6 +388,25 @@ body {
   padding: 0 14px;
   font-size: 0.8rem;
   flex-shrink: 0;
+}
+.btn-buy {
+  min-height: 44px;
+  padding: 0 18px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, rgba(45, 212, 191, 0.22), rgba(13, 148, 136, 0.28));
+  border-color: var(--teal);
+  color: #5eead4;
+}
+.shop-block .btn-buy {
+  min-height: 48px;
+  font-size: 1rem;
+}
+.affiliate-note {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-align: center;
+  margin: 12px 0 4px;
 }
 .btn-block { width: 100%; }
 .btn-sm { min-height: 36px; padding: 0 12px; font-size: 0.8rem; }
@@ -1024,4 +1044,141 @@ body {
     box-shadow: 0 0 0 1px var(--border), var(--shadow);
     min-height: 100vh;
   }
+}
+
+
+/* Your boat & trailer card — impossible to miss */
+.your-gear-card {
+  background: linear-gradient(145deg, rgba(45, 212, 191, 0.14), rgba(30, 40, 54, 0.95));
+  border: 1px solid rgba(45, 212, 191, 0.35);
+  border-radius: 16px;
+  padding: 16px;
+  margin: 0 0 14px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+}
+.your-gear-card.incomplete {
+  border-color: rgba(251, 191, 36, 0.45);
+  background: linear-gradient(145deg, rgba(251, 191, 36, 0.12), rgba(30, 40, 54, 0.95));
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.your-gear-card .ygc-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.your-gear-card .ygc-body h3 {
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+}
+.your-gear-card .ygc-body p {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.35;
+}
+.your-gear-card .ygc-summary {
+  color: var(--teal) !important;
+  font-weight: 650;
+  font-size: 0.95rem !important;
+  margin-top: 2px !important;
+}
+.your-gear-card .ygc-hint {
+  font-size: 0.78rem !important;
+  color: var(--text-dim) !important;
+  margin-top: 4px !important;
+}
+.your-gear-card.incomplete .ygc-body,
+.your-gear-card.incomplete > .ygc-icon {
+  margin-bottom: 12px;
+}
+.your-gear-card.complete {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.your-gear-card .ygc-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+.your-gear-card.complete > .btn {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.gear-cta-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+.gear-cta-card.compact { margin-bottom: 12px; }
+.gear-cta-body strong {
+  display: block;
+  font-size: 0.98rem;
+  margin-bottom: 4px;
+}
+.gear-cta-body span {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.view-hero {
+  margin: 0 0 12px;
+}
+.view-hero h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
+}
+.view-hero p {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+.view-hero-sub {
+  color: var(--teal) !important;
+  font-weight: 600;
+  margin-bottom: 4px !important;
+}
+
+.badge.for-you {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--teal);
+  background: var(--teal-bg);
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.opt-label {
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--amber);
+  margin-left: 4px;
+}
+
+.bottom-nav .nav-btn {
+  font-size: 0.62rem;
 }

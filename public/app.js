@@ -9,7 +9,7 @@
   const STORAGE_KEY = "boatTrailerMaint.v1";
   const DUE_SOON_DAYS = 14;
 
-  const BUILD = "v1-setup";
+  const BUILD = "v1-gear-shop";
 
   const BOAT_TYPES = [
     { value: "center-console", label: "Center console" },
@@ -86,8 +86,14 @@
     const boat = (d.assets || []).find((a) => a.type === "boat");
     const trailer = (d.assets || []).find((a) => a.type === "trailer");
     const parts = [];
-    if (boat?.boatType) parts.push(boatTypeLabel(boat.boatType));
-    if (boat?.engineType) {
+    if (boat?.makeModel) {
+      parts.push(boat.makeModel);
+    } else if (boat?.boatType) {
+      parts.push(boatTypeLabel(boat.boatType));
+    }
+    if (boat?.engineMakeModel) {
+      parts.push(boat.engineMakeModel);
+    } else if (boat?.engineType) {
       const eng = engineTypeLabel(boat.engineType);
       if (boat.engineType === "none") {
         parts.push("No engine");
@@ -100,7 +106,9 @@
         parts.push(eng);
       }
     }
-    if (trailer?.trailerType) {
+    if (trailer?.makeModel) {
+      parts.push(trailer.makeModel);
+    } else if (trailer?.trailerType) {
       if (trailer.trailerType === "none") parts.push("No trailer");
       else parts.push(trailerTypeLabel(trailer.trailerType));
     }
@@ -191,6 +199,78 @@
     return "https://www.amazon.com/s?k=" + encodeURIComponent(q);
   }
 
+  function partSearchQuery(part) {
+    if (part && part.search) return part.search;
+    if (part && part.url) {
+      try {
+        const u = new URL(part.url);
+        const k = u.searchParams.get("k");
+        if (k) return k;
+      } catch (e) { /* ignore */ }
+    }
+    return (part && part.name) || "";
+  }
+
+  function buyUrlForPart(part, asset) {
+    const base = partSearchQuery(part);
+    const boat = getBoat();
+    const trailer = getTrailer();
+    let prefix = "";
+    if (asset && asset.type === "trailer") {
+      prefix = (trailer && trailer.makeModel) || "";
+    } else {
+      prefix =
+        (boat && boat.engineMakeModel) ||
+        (boat && boat.makeModel) ||
+        "";
+    }
+    const q = prefix ? (prefix + " " + base).trim() : base;
+    return amazonSearch(q);
+  }
+
+  function affiliateNoteHTML() {
+    return `<p class="affiliate-note">Buy links help support Dockside</p>`;
+  }
+
+  function addGearCTAHTML(compact) {
+    return `
+      <div class="gear-cta-card ${compact ? "compact" : ""}" data-action="goto-setup">
+        <div class="gear-cta-body">
+          <strong>Add your boat &amp; trailer</strong>
+          <span>Boat type, engine, and trailer — so guides and parts match what you run</span>
+        </div>
+        <button type="button" class="btn btn-primary" data-action="goto-setup">Add my gear</button>
+      </div>`;
+  }
+
+  function yourGearCardHTML() {
+    const incomplete = needsSetup(state);
+    if (incomplete) {
+      return `
+        <div class="your-gear-card incomplete">
+          <div class="ygc-icon">🚤</div>
+          <div class="ygc-body">
+            <h3>Add your boat &amp; trailer</h3>
+            <p>Boat type, engine, and trailer — so guides and parts match what you run</p>
+          </div>
+          <button type="button" class="btn btn-primary btn-block" data-action="goto-setup">Add my gear</button>
+        </div>`;
+    }
+    const summary = gearSummaryLabel();
+    return `
+      <div class="your-gear-card complete">
+        <div class="ygc-top">
+          <div class="ygc-icon">⚓</div>
+          <div class="ygc-body">
+            <h3>Your boat &amp; trailer</h3>
+            <p class="ygc-summary">${escapeHtml(summary)}</p>
+            <p class="ygc-hint">Guides &amp; parts are tailored to this.</p>
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary" data-action="goto-setup">Edit</button>
+      </div>`;
+  }
+
   function nextDue(task) {
     if (!task.lastDoneAt || !task.intervalDays) return null;
     return addDays(task.lastDoneAt.slice(0, 10), task.intervalDays);
@@ -231,7 +311,7 @@
   }
 
   function part(id, name, why, search) {
-    return { id, name, why, url: amazonSearch(search) };
+    return { id, name, why, search, url: amazonSearch(search) };
   }
 
 
@@ -513,6 +593,8 @@
         engineType: null,
         engineHp: null,
         engineSizeLabel: null,
+        makeModel: null,
+        engineMakeModel: null,
       },
       {
         id: trailerId,
@@ -522,6 +604,7 @@
         hourMeter: null,
         odometer: null,
         trailerType: null,
+        makeModel: null,
       },
     ];
 
@@ -576,9 +659,12 @@
         if (!("engineType" in a)) { a.engineType = null; changed = true; }
         if (!("engineHp" in a)) { a.engineHp = null; changed = true; }
         if (!("engineSizeLabel" in a)) { a.engineSizeLabel = null; changed = true; }
+        if (!("makeModel" in a)) { a.makeModel = null; changed = true; }
+        if (!("engineMakeModel" in a)) { a.engineMakeModel = null; changed = true; }
       }
       if (a.type === "trailer") {
         if (!("trailerType" in a)) { a.trailerType = null; changed = true; }
+        if (!("makeModel" in a)) { a.makeModel = null; changed = true; }
       }
     });
     // Missing gear fields → force setup again
@@ -682,10 +768,10 @@
     } else if (currentView === "task") {
       navigate("track", { clearHistory: true });
     } else if (currentView === "setup") {
-      if (state.setupComplete) navigate("more", { clearHistory: true });
+      if (state.setupComplete) navigate("gear", { clearHistory: true });
       else navigate("track", { clearHistory: true });
     } else if (currentView === "asset" || currentView === "settings" || currentView === "assets") {
-      navigate("more", { clearHistory: true });
+      navigate("gear", { clearHistory: true });
     } else {
       navigate("track", { clearHistory: true });
     }
@@ -866,6 +952,9 @@
       return;
     }
     const size = resolveEngineSize(form);
+    const boatMakeModel = (form.boatMakeModel?.value || "").trim() || null;
+    const engineMakeModel = (form.engineMakeModel?.value || "").trim() || null;
+    const trailerMakeModel = (form.trailerMakeModel?.value || "").trim() || null;
     const boat = getBoat();
     const trailer = getTrailer();
     if (boat) {
@@ -873,16 +962,26 @@
       boat.engineType = engineType;
       boat.engineHp = size.engineHp;
       boat.engineSizeLabel = size.engineSizeLabel;
-      const typeLabel = boatTypeLabel(boatType);
-      if (!boat.name || boat.name === "My Boat") {
+      boat.makeModel = boatMakeModel;
+      boat.engineMakeModel = engineType === "none" ? null : engineMakeModel;
+      const typeLabel = boatMakeModel || boatTypeLabel(boatType);
+      if (!boat.name || boat.name === "My Boat" || BOAT_TYPES.some((t) => t.label === boat.name)) {
         boat.name = typeLabel;
       }
     }
     if (trailer) {
       trailer.trailerType = trailerType;
-      if (!trailer.name || trailer.name === "My Trailer") {
+      trailer.makeModel = trailerType === "none" ? null : trailerMakeModel;
+      if (
+        !trailer.name ||
+        trailer.name === "My Trailer" ||
+        TRAILER_TYPES.some((t) => t.label === trailer.name) ||
+        trailer.name === "No trailer"
+      ) {
         trailer.name =
-          trailerType === "none" ? "No trailer" : trailerTypeLabel(trailerType);
+          trailerType === "none"
+            ? "No trailer"
+            : trailerMakeModel || trailerTypeLabel(trailerType);
       }
     }
     state.setupComplete = true;
@@ -1146,11 +1245,11 @@
     return parts.join("");
   }
 
-  function partsListHTML(parts) {
+  function partsListHTML(parts, asset) {
     if (!parts || !parts.length) {
       return `<p style="font-size:0.85rem;color:var(--text-muted)">No parts listed for this job yet.</p>`;
     }
-    return parts
+    const rows = parts
       .map(
         (p) => `
       <div class="part-row">
@@ -1158,10 +1257,11 @@
           <div class="part-name">${escapeHtml(p.name)}</div>
           <div class="part-why">${escapeHtml(p.why)}</div>
         </div>
-        <a class="btn btn-shop" href="${escapeAttr(p.url)}" target="_blank" rel="noopener noreferrer">Shop</a>
+        <a class="btn btn-buy" href="${escapeAttr(buyUrlForPart(p, asset))}" target="_blank" rel="noopener noreferrer">Buy</a>
       </div>`
       )
       .join("");
+    return rows + affiliateNoteHTML();
   }
 
 
@@ -1195,7 +1295,7 @@
         <div class="setup-hero">
           <div class="setup-emoji">🚤</div>
           <h2>${editing ? "Your gear" : "Welcome to Dockside"}</h2>
-          <p>Tell Dockside what you run — we’ll tailor maintenance.</p>
+          <p>Tell Dockside what you run — we’ll tailor guides and parts.</p>
         </div>
         <form id="setup-form" class="setup-form">
           <div class="form-group setup-field">
@@ -1204,6 +1304,10 @@
               <option value="" disabled ${!boat.boatType ? "selected" : ""}>Select boat type</option>
               ${optionsHTML(BOAT_TYPES, boat.boatType || "")}
             </select>
+          </div>
+          <div class="form-group setup-field">
+            <label for="boatMakeModel">Boat make / model <span class="opt-label">encouraged</span></label>
+            <input type="text" id="boatMakeModel" name="boatMakeModel" class="setup-select" maxlength="80" placeholder="e.g. Scout 210, Sea Ray 240" value="${escapeAttr(boat.makeModel || "")}" />
           </div>
           <div class="form-group setup-field">
             <label for="engineType">Engine type</label>
@@ -1227,12 +1331,20 @@
             <label for="engineKw">Motor size (kW) — optional</label>
             <input type="number" id="engineKw" name="engineKw" min="0" step="0.1" placeholder="e.g. 10" value="${escapeAttr(kwVal)}" class="setup-select" />
           </div>
+          <div class="form-group setup-field" id="engine-make-model" ${engineType === "none" || !engineType ? 'style="display:none"' : ""}>
+            <label for="engineMakeModel">Engine make / model <span class="opt-label">encouraged</span></label>
+            <input type="text" id="engineMakeModel" name="engineMakeModel" class="setup-select" maxlength="80" placeholder="e.g. Yamaha F150" value="${escapeAttr(boat.engineMakeModel || "")}" />
+          </div>
           <div class="form-group setup-field">
             <label for="trailerType">Trailer type</label>
             <select id="trailerType" name="trailerType" required class="setup-select">
               <option value="" disabled ${!trailer.trailerType ? "selected" : ""}>Select trailer type</option>
               ${optionsHTML(TRAILER_TYPES, trailer.trailerType || "")}
             </select>
+          </div>
+          <div class="form-group setup-field" id="trailer-make-model" ${trailer.trailerType === "none" ? 'style="display:none"' : ""}>
+            <label for="trailerMakeModel">Trailer make / model <span class="opt-label">optional</span></label>
+            <input type="text" id="trailerMakeModel" name="trailerMakeModel" class="setup-select" maxlength="80" placeholder="e.g. Load Rite, Magic Tilt" value="${escapeAttr(trailer.makeModel || "")}" />
           </div>
           <button type="submit" class="btn btn-primary btn-block setup-cta">
             ${editing ? "Save gear" : "Save & see my schedule"}
@@ -1257,33 +1369,8 @@
       ),
     ].join("");
 
-    const summary = gearSummaryLabel();
-    const basedOn = state.setupComplete
-      ? `<p class="gear-based">Based on your ${escapeHtml(summary)}</p>`
-      : "";
-    const incompleteBanner = !state.setupComplete
-      ? `<div class="setup-banner" data-action="goto-setup">
-           <div class="setup-banner-body">
-             <strong>Complete your gear profile</strong>
-             <span>Tell Dockside what you run — we’ll tailor maintenance.</span>
-           </div>
-           <span class="chevron">›</span>
-         </div>`
-      : "";
-    const gearChip = state.setupComplete
-      ? `<div class="gear-chip-row">
-           <button type="button" class="gear-chip" data-action="goto-setup">
-             <span class="gear-chip-icon">⚓</span>
-             <span class="gear-chip-text">${escapeHtml(summary)}</span>
-             <span class="gear-chip-edit">Edit</span>
-           </button>
-         </div>`
-      : "";
-
     return `
-      ${incompleteBanner}
-      ${gearChip}
-      ${basedOn}
+      ${yourGearCardHTML()}
       <div class="stats-strip">
         <div class="stat-pill overdue"><div class="num">${groups.overdue.length}</div><div class="lbl">Overdue</div></div>
         <div class="stat-pill due-soon"><div class="num">${groups.dueSoon.length}</div><div class="lbl">Due soon</div></div>
@@ -1292,13 +1379,16 @@
       <div class="asset-chips">${chips}</div>
       <div class="cta-row">
         <button type="button" class="btn btn-primary" data-action="add-task">+ Add task</button>
-        <button type="button" class="btn btn-secondary" data-action="goto-more">Assets</button>
+        <button type="button" class="btn btn-secondary" data-action="goto-assets">Assets</button>
       </div>
       ${sectionsHTML(groups, "Nothing due in this filter. Add a task or check another asset.", { showAsset: filterAssetId === "all" })}
     `;
   }
 
-  function renderGuides() {
+    function renderGuides() {
+    const incomplete = needsSetup(state);
+    const boat = getBoat();
+    const trailer = getTrailer();
     let tasks = visibleTasks(state.tasks).filter((t) => Array.isArray(t.steps) && t.steps.length > 0);
     if (guidesFilter === "boat" || guidesFilter === "trailer") {
       tasks = tasks.filter((t) => {
@@ -1307,6 +1397,26 @@
       });
     }
     tasks = [...tasks].sort((a, b) => a.title.localeCompare(b.title));
+
+    const boatLabel = boat?.makeModel || (boat?.boatType ? boatTypeLabel(boat.boatType) : "boat");
+    const trailerLabel =
+      trailer?.makeModel ||
+      (trailer?.trailerType && trailer.trailerType !== "none"
+        ? trailerTypeLabel(trailer.trailerType)
+        : "trailer");
+
+    let header = "";
+    if (!incomplete) {
+      if (guidesFilter === "trailer") {
+        header = `<div class="view-hero"><h2>Fix your ${escapeHtml(trailerLabel)}</h2><p>Step-by-step for your trailer — then shop the parts.</p></div>`;
+      } else if (guidesFilter === "boat") {
+        header = `<div class="view-hero"><h2>Fix your ${escapeHtml(boatLabel)}</h2><p>Step-by-step for your boat — then shop the parts.</p></div>`;
+      } else {
+        header = `<div class="view-hero"><h2>Fix your ${escapeHtml(boatLabel)}</h2><p class="view-hero-sub">Also: fix your ${escapeHtml(trailerLabel)}</p><p>How-tos matched to what you run — shop parts for each job.</p></div>`;
+      }
+    } else {
+      header = `<div class="view-hero"><h2>Fix your boat &amp; trailer</h2><p>Add your gear so guides match what you run.</p></div>`;
+    }
 
     const chips = `
       <button type="button" class="chip ${guidesFilter === "all" ? "active" : ""}" data-action="filter-guides" data-id="all">All</button>
@@ -1320,12 +1430,16 @@
             const asset = state.assets.find((a) => a.id === t.assetId);
             const n = t.steps.length;
             const pc = (t.parts || []).length;
+            const badge = asset?.type === "trailer" ? "For your trailer" : "For your boat";
             return `
             <div class="guide-row" data-action="open-guide" data-id="${t.id}">
               <div class="guide-icon">${asset?.type === "trailer" ? "🚛" : "🚤"}</div>
               <div class="guide-info">
                 <div class="guide-title">${escapeHtml(t.title)}</div>
-                <div class="guide-meta">${escapeHtml(asset?.name || "")} · ${n} steps${pc ? ` · ${pc} parts` : ""}</div>
+                <div class="guide-meta">
+                  <span class="badge for-you">${badge}</span>
+                  ${n} steps${pc ? ` · ${pc} parts` : ""}
+                </div>
               </div>
               <span class="chevron">›</span>
             </div>`;
@@ -1334,6 +1448,8 @@
       : `<div class="empty-state"><div class="empty-icon">📖</div><h3>No guides yet</h3><p>Seeded tasks include how-tos. Reset data in Settings if needed.</p></div>`;
 
     return `
+      ${incomplete ? addGearCTAHTML(true) : ""}
+      ${header}
       ${proBannerHTML()}
       <div class="asset-chips">${chips}</div>
       <div class="section-label">How-to guides <span class="count">${tasks.length}</span></div>
@@ -1342,6 +1458,8 @@
   }
 
   function renderParts() {
+    const incomplete = needsSetup(state);
+    const boat = getBoat();
     const byAsset = {};
     state.assets.forEach((a) => {
       byAsset[a.id] = [];
@@ -1354,14 +1472,29 @@
       });
     });
 
+    let engineHeader = "Parts for your boat";
+    if (!incomplete && boat) {
+      const size = boat.engineSizeLabel || "";
+      const eng =
+        boat.engineMakeModel ||
+        (boat.engineType && boat.engineType !== "none" ? engineTypeLabel(boat.engineType) : "");
+      if (size || eng) {
+        engineHeader = `Parts for your ${[size, eng].filter(Boolean).join(" ")}`.trim();
+      } else if (boat.makeModel) {
+        engineHeader = `Parts for your ${boat.makeModel}`;
+      }
+    }
+
     let total = 0;
     const sections = state.assets
       .map((a) => {
         const items = byAsset[a.id] || [];
         total += items.length;
         if (!items.length) return "";
+        const sectionTitle =
+          a.type === "boat" ? "For your boat" : a.type === "trailer" ? "For your trailer" : a.name;
         return `
-          <div class="section-label">${escapeHtml(a.name)} <span class="count">${items.length}</span></div>
+          <div class="section-label">${escapeHtml(sectionTitle)} <span class="count">${items.length}</span></div>
           ${items
             .map(
               (row) => `
@@ -1371,33 +1504,40 @@
                 <div class="part-why">${escapeHtml(row.part.why)}</div>
                 <div class="part-task">${escapeHtml(row.task.title)}</div>
               </div>
-              <a class="btn btn-shop" href="${escapeAttr(row.part.url)}" target="_blank" rel="noopener noreferrer">Shop</a>
+              <a class="btn btn-buy" href="${escapeAttr(buyUrlForPart(row.part, a))}" target="_blank" rel="noopener noreferrer">Buy</a>
             </div>`
             )
             .join("")}`;
       })
       .join("");
 
+    const header = incomplete
+      ? `<div class="view-hero"><h2>Parts for your boat &amp; trailer</h2><p>Add your gear so buy links match your engine and trailer.</p></div>`
+      : `<div class="view-hero"><h2>${escapeHtml(engineHeader)}</h2><p>Shop Amazon for the job — make/model included when you add it.</p></div>`;
+
     return `
+      ${incomplete ? addGearCTAHTML(true) : ""}
+      ${header}
       ${proBannerHTML()}
-      <div class="section-label">Parts catalog <span class="count">${total}</span></div>
       ${
         total
-          ? sections
-          : `<div class="empty-state"><div class="empty-icon">🔧</div><h3>No parts yet</h3><p>Seeded jobs include shop links. Reset in Settings if your data is empty.</p></div>`
+          ? sections + affiliateNoteHTML()
+          : `<div class="empty-state"><div class="empty-icon">🔧</div><h3>No parts yet</h3><p>Seeded jobs include buy links. Reset in Settings if your data is empty.</p></div>`
       }
     `;
   }
 
-  function renderMore() {
+  function renderGear() {
+    const incomplete = needsSetup(state);
     const overdue = visibleTasks(state.tasks).filter((t) => statusOf(t) === "overdue" || !t.lastDoneAt).length;
-    const summary = state.setupComplete ? gearSummaryLabel() : "Not set up yet";
+    const summary = incomplete ? "Not set up yet" : gearSummaryLabel();
     return `
-      <div class="section-label">Menu</div>
+      ${yourGearCardHTML()}
+      <div class="section-label">Gear hub</div>
       <div class="more-menu-item" data-action="goto-setup">
-        <div class="mm-icon">⚓</div>
+        <div class="mm-icon">✏️</div>
         <div class="mm-body">
-          <div class="mm-title">Your gear</div>
+          <div class="mm-title">${incomplete ? "Add boat, engine & trailer" : "Edit boat, engine & trailer"}</div>
           <div class="mm-sub">${escapeHtml(summary)}</div>
         </div>
         <span class="chevron">›</span>
@@ -1423,6 +1563,7 @@
       </p>
     `;
   }
+
 
   function renderAssets() {
     return `
@@ -1531,7 +1672,7 @@
       </div>
 
       <div class="howto-block ${focusGuide ? "highlight" : ""}" id="howto-section">
-        <h3>📖 How-to</h3>
+        <h3>📖 How to fix this on your ${escapeHtml(asset?.name || (asset?.type === "trailer" ? "trailer" : "boat"))}</h3>
         ${
           steps.length
             ? `<ol class="howto-steps">${steps.map((s) => `<li>${escapeHtml(s)}</li>`).join("")}</ol>
@@ -1540,9 +1681,9 @@
         }
       </div>
 
-      <div class="parts-block">
-        <h3>🔧 Parts for this job</h3>
-        ${partsListHTML(parts)}
+      <div class="parts-block shop-block">
+        <h3>🛒 Shop parts for this job</h3>
+        ${partsListHTML(parts, asset)}
       </div>
     `;
   }
@@ -1614,7 +1755,7 @@
     if (currentView === "track") return "Dockside";
     if (currentView === "guides") return "Guides";
     if (currentView === "parts") return "Parts";
-    if (currentView === "more") return "More";
+    if (currentView === "gear") return "Gear";
     if (currentView === "assets") return "Assets";
     if (currentView === "settings") return "Settings";
     if (currentView === "asset") {
@@ -1641,7 +1782,7 @@
     else if (currentView === "track") html = renderTrack();
     else if (currentView === "guides") html = renderGuides();
     else if (currentView === "parts") html = renderParts();
-    else if (currentView === "more") html = renderMore();
+    else if (currentView === "gear") html = renderGear();
     else if (currentView === "assets") html = renderAssets();
     else if (currentView === "asset") html = renderAssetDetail();
     else if (currentView === "task") html = renderTaskDetail();
@@ -1657,11 +1798,12 @@
         (v === "track" && currentView === "track") ||
         (v === "guides" && currentView === "guides") ||
         (v === "parts" && currentView === "parts") ||
-        (v === "more" &&
-          (currentView === "more" ||
+        (v === "gear" &&
+          (currentView === "gear" ||
             currentView === "assets" ||
             currentView === "asset" ||
-            currentView === "settings"));
+            currentView === "settings" ||
+            currentView === "setup"));
       if (currentView === "task") {
         if (taskDetailFocus === "guide") {
           active = v === "guides";
@@ -1692,15 +1834,23 @@
         const hpBlock = document.getElementById("engine-size-hp");
         const customBlock = document.getElementById("engine-size-custom");
         const kwBlock = document.getElementById("engine-size-kw");
+        const engMake = document.getElementById("engine-make-model");
         if (hpBlock) hpBlock.style.display = et && et !== "none" && et !== "electric" ? "" : "none";
         if (kwBlock) kwBlock.style.display = et === "electric" ? "" : "none";
+        if (engMake) engMake.style.display = et && et !== "none" ? "" : "none";
         if (customBlock) {
           customBlock.style.display =
             et && et !== "none" && et !== "electric" && hpPreset?.value === "custom" ? "" : "none";
         }
       };
+      const syncTrailerMake = () => {
+        const tt = setupForm.trailerType?.value;
+        const block = document.getElementById("trailer-make-model");
+        if (block) block.style.display = tt && tt !== "none" ? "" : "none";
+      };
       if (engSel) engSel.addEventListener("change", syncEngineSize);
       if (hpPreset) hpPreset.addEventListener("change", syncEngineSize);
+      if (setupForm.trailerType) setupForm.trailerType.addEventListener("change", syncTrailerMake);
     }
     const imp = document.getElementById("import-file");
     if (imp) {
@@ -1761,11 +1911,11 @@
         guidesFilter = id;
         render();
         break;
-      case "goto-more":
-        navigate("more", { clearHistory: true });
+      case "goto-gear":
+        navigate("gear", { clearHistory: true });
         break;
       case "goto-assets":
-        navigate("assets", { pushHistory: currentView === "more" });
+        navigate("assets", { pushHistory: currentView === "gear" });
         break;
       case "goto-asset":
         navigate("asset", { assetId: id, pushHistory: true });
@@ -1805,7 +1955,7 @@
         if (v === "track") navigate("track", { clearHistory: true });
         else if (v === "guides") navigate("guides", { clearHistory: true });
         else if (v === "parts") navigate("parts", { clearHistory: true });
-        else if (v === "more") navigate("more", { clearHistory: true });
+        else if (v === "gear") navigate("gear", { clearHistory: true });
       });
     });
 
@@ -1819,7 +1969,7 @@
     else if (hash === "assets") currentView = "assets";
     else if (hash === "guides") currentView = "guides";
     else if (hash === "parts") currentView = "parts";
-    else if (hash === "more") currentView = "more";
+    else if (hash === "gear" || hash === "more") currentView = "gear";
     else if (hash === "setup") currentView = "setup";
 
     render();
