@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0f1419" />
+  <meta name="bm-build" content="v1-product" />
+  <meta name="description" content="Dockside — Track. Fix. Buy. Boat and trailer maintenance tracker with how-to guides and parts shopping." />
+  <title>Dockside — Track. Fix. Buy.</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%230f766e' rx='8' width='32' height='32'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-size='16'%3E⚓%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <button type="button" id="btn-back" class="btn-icon hidden" aria-label="Back">←</button>
+      <div class="logo" aria-hidden="true">⚓</div>
+      <div class="header-text">
+        <h1 id="header-title">Dockside</h1>
+        <p id="header-tagline" class="tagline">Track. Fix. Buy.</p>
+      </div>
+      <button type="button" id="btn-add" class="btn-icon" aria-label="Add task" title="Add task">＋</button>
+    </header>
+
+    <main id="main" class="view active" role="main">
+      <!-- filled by app.js -->
+    </main>
+
+    <nav class="bottom-nav" role="navigation" aria-label="Main">
+      <button type="button" class="nav-btn active" data-view="track">
+        <span class="nav-icon">📋</span>
+        Track
+      </button>
+      <button type="button" class="nav-btn" data-view="guides">
+        <span class="nav-icon">📖</span>
+        Guides
+      </button>
+      <button type="button" class="nav-btn" data-view="parts">
+        <span class="nav-icon">🔧</span>
+        Parts
+      </button>
+      <button type="button" class="nav-btn" data-view="more">
+        <span class="nav-icon">⋯</span>
+        More
+      </button>
+    </nav>
+  </div>
+
+  <div id="overlay" class="overlay" aria-live="polite"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
