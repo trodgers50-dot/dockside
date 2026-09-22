@@ -422,10 +422,10 @@ body {
 }
 .form-group label {
   display: block;
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: 0.82rem;
+  font-weight: 650;
   color: var(--text-muted);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -433,8 +433,8 @@ body {
 .form-group select,
 .form-group textarea {
   width: 100%;
-  min-height: 44px;
-  padding: 10px 12px;
+  min-height: 48px;
+  padding: 12px 14px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -880,6 +880,133 @@ body {
 .more-menu-item .mm-title { font-weight: 650; font-size: 1rem; }
 .more-menu-item .mm-sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
 .more-menu-item .chevron { color: var(--text-dim); }
+
+
+/* Setup / gear profile */
+.setup-mode .bottom-nav { display: none; }
+.setup-mode #main {
+  padding-bottom: calc(24px + var(--safe-bottom));
+}
+.setup-screen {
+  padding-top: 8px;
+}
+.setup-hero {
+  text-align: center;
+  margin-bottom: 22px;
+  padding: 8px 8px 4px;
+}
+.setup-emoji {
+  font-size: 2.4rem;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+.setup-hero h2 {
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+.setup-hero p {
+  color: var(--text-muted);
+  font-size: 0.98rem;
+  line-height: 1.4;
+  max-width: 20em;
+  margin: 0 auto;
+}
+.setup-form .setup-field {
+  margin-bottom: 18px;
+}
+.setup-select,
+.setup-form select.setup-select,
+.setup-form input.setup-select {
+  min-height: 52px;
+  font-size: 1.05rem;
+  border-radius: 12px;
+  background-color: var(--bg-elevated);
+}
+.setup-cta {
+  margin-top: 10px;
+  min-height: 52px;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.gear-chip-row {
+  margin: 0 0 8px;
+}
+.gear-chip {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--teal-bg);
+  border: 1px solid rgba(45, 212, 191, 0.28);
+  border-radius: 14px;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.gear-chip:active { transform: scale(0.99); opacity: 0.95; }
+.gear-chip-icon {
+  flex-shrink: 0;
+  font-size: 1.1rem;
+}
+.gear-chip-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--teal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gear-chip-edit {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text);
+  background: rgba(15, 20, 25, 0.45);
+  padding: 5px 10px;
+  border-radius: 999px;
+}
+.gear-based {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin: 0 0 12px;
+  padding: 0 2px;
+}
+
+.setup-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  background: var(--amber-bg);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.setup-banner-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.setup-banner-body strong {
+  font-size: 0.92rem;
+  color: var(--amber);
+}
+.setup-banner-body span {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.setup-banner .chevron { color: var(--amber); font-size: 1.2rem; }
 
 /* Utility */
 .hidden { display: none !important; }

@@ -8,7 +8,167 @@
 
   const STORAGE_KEY = "boatTrailerMaint.v1";
   const DUE_SOON_DAYS = 14;
-  const BUILD = "v1-product";
+
+  const BUILD = "v1-setup";
+
+  const BOAT_TYPES = [
+    { value: "center-console", label: "Center console" },
+    { value: "bay-boat", label: "Bay boat" },
+    { value: "pontoon", label: "Pontoon" },
+    { value: "deck-boat", label: "Deck boat" },
+    { value: "fishing-bass", label: "Fishing / bass" },
+    { value: "ski-wake", label: "Ski / wake" },
+    { value: "sailboat", label: "Sailboat" },
+    { value: "other", label: "Other" },
+  ];
+
+  const ENGINE_TYPES = [
+    { value: "outboard", label: "Outboard" },
+    { value: "inboard", label: "Inboard" },
+    { value: "sterndrive", label: "Sterndrive / I/O" },
+    { value: "jet", label: "Jet" },
+    { value: "electric", label: "Electric" },
+    { value: "none", label: "None / sail only" },
+  ];
+
+  const ENGINE_HP_PRESETS = ["9.9", "25", "40", "60", "90", "115", "150", "200", "250", "300+"];
+
+  const TRAILER_TYPES = [
+    { value: "bunk", label: "Bunk trailer" },
+    { value: "roller", label: "Roller trailer" },
+    { value: "float-on", label: "Float-on" },
+    { value: "pontoon", label: "Pontoon trailer" },
+    { value: "pwc", label: "Personal watercraft" },
+    { value: "none", label: "Other / no trailer" },
+  ];
+
+  const ENGINE_TASK_TITLES = [
+    "Engine oil & filter",
+    "Lower unit / gearcase oil",
+    "Impeller / water pump",
+    "Fuel filter / water separator",
+  ];
+
+  const TRAILER_HEAVY_TITLES = [
+    "Hub bearings / grease",
+    "Brakes (if applicable)",
+    "Leaf springs / suspension",
+    "Wheel bearings service",
+  ];
+
+  function labelFor(list, value) {
+    const hit = list.find((x) => x.value === value);
+    return hit ? hit.label : value || "";
+  }
+
+  function boatTypeLabel(v) { return labelFor(BOAT_TYPES, v); }
+  function engineTypeLabel(v) { return labelFor(ENGINE_TYPES, v); }
+  function trailerTypeLabel(v) { return labelFor(TRAILER_TYPES, v); }
+
+  function getBoat() {
+    return state.assets.find((a) => a.type === "boat") || null;
+  }
+  function getTrailer() {
+    return state.assets.find((a) => a.type === "trailer") || null;
+  }
+
+  function needsSetup(data) {
+    if (!data || data.setupComplete !== true) return true;
+    const boat = (data.assets || []).find((a) => a.type === "boat");
+    const trailer = (data.assets || []).find((a) => a.type === "trailer");
+    if (!boat || !boat.boatType || !boat.engineType) return true;
+    if (!trailer || !trailer.trailerType) return true;
+    return false;
+  }
+
+  function gearSummaryParts(data) {
+    const d = data || state;
+    const boat = (d.assets || []).find((a) => a.type === "boat");
+    const trailer = (d.assets || []).find((a) => a.type === "trailer");
+    const parts = [];
+    if (boat?.boatType) parts.push(boatTypeLabel(boat.boatType));
+    if (boat?.engineType) {
+      const eng = engineTypeLabel(boat.engineType);
+      if (boat.engineType === "none") {
+        parts.push("No engine");
+      } else if (boat.engineSizeLabel) {
+        let size = boat.engineSizeLabel.replace(/ HP$/i, "hp").replace(/ kW$/i, "kW");
+        if (/^\d/.test(size) && !size.endsWith("hp") && !size.endsWith("kW")) size += "hp";
+        const short = eng.replace(" / I/O", "").replace(" / sail only", "").toLowerCase();
+        parts.push(`${size} ${short}`);
+      } else {
+        parts.push(eng);
+      }
+    }
+    if (trailer?.trailerType) {
+      if (trailer.trailerType === "none") parts.push("No trailer");
+      else parts.push(trailerTypeLabel(trailer.trailerType));
+    }
+    return parts;
+  }
+
+  function gearSummaryLabel(data) {
+    const parts = gearSummaryParts(data);
+    return parts.length ? parts.join(" · ") : "Your gear";
+  }
+
+  function taskRelevantForGear(task, boat, trailer) {
+    const title = task.title;
+    const engineType = boat?.engineType || "";
+    const trailerType = trailer?.trailerType || "";
+
+    const isEngineTask = ENGINE_TASK_TITLES.includes(title);
+    const isTrailerHeavy = TRAILER_HEAVY_TITLES.includes(title);
+
+    if (isEngineTask) {
+      if (!engineType || engineType === "none") return false;
+      if (engineType === "electric") {
+        // Electric: skip oil / lower unit / impeller / fuel filter
+        return false;
+      }
+      if (engineType === "inboard") {
+        // Pure inboard: no outboard lower-unit service
+        if (title === "Lower unit / gearcase oil") return false;
+      }
+      if (engineType === "jet") {
+        if (title === "Lower unit / gearcase oil") return false;
+      }
+      // outboard, sterndrive, jet (partial): keep remaining engine tasks
+      return true;
+    }
+
+    if (isTrailerHeavy) {
+      if (!trailerType || trailerType === "none") return false;
+      if (trailerType === "pwc") {
+        // PWC trailer: lighter set — hide brakes / springs / full bearing service
+        if (
+          title === "Brakes (if applicable)" ||
+          title === "Leaf springs / suspension" ||
+          title === "Wheel bearings service"
+        ) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  function visibleTasks(tasks) {
+    const boat = getBoat();
+    const trailer = getTrailer();
+    if (!state.setupComplete) return tasks;
+    return tasks.filter((t) => taskRelevantForGear(t, boat, trailer));
+  }
+
+  function optionsHTML(list, selected) {
+    return list
+      .map(
+        (o) =>
+          `<option value="${escapeAttr(o.value)}" ${o.value === selected ? "selected" : ""}>${escapeHtml(o.label)}</option>`
+      )
+      .join("");
+  }
 
   // ── Helpers ──────────────────────────────────────────────
   const uid = () =>
@@ -349,6 +509,10 @@
         notes: "Primary vessel — update name & hour meter in Settings.",
         hourMeter: null,
         odometer: null,
+        boatType: null,
+        engineType: null,
+        engineHp: null,
+        engineSizeLabel: null,
       },
       {
         id: trailerId,
@@ -357,6 +521,7 @@
         notes: "Boat trailer — hubs, lights, tires, winch, brakes.",
         hourMeter: null,
         odometer: null,
+        trailerType: null,
       },
     ];
 
@@ -390,6 +555,7 @@
 
     return {
       version: 1,
+      setupComplete: false,
       assets,
       tasks,
       logs: [],
@@ -400,6 +566,32 @@
   // ── Persistence + migration ──────────────────────────────
   function migrateData(data) {
     let changed = false;
+    if (typeof data.setupComplete !== "boolean") {
+      data.setupComplete = false;
+      changed = true;
+    }
+    (data.assets || []).forEach((a) => {
+      if (a.type === "boat") {
+        if (!("boatType" in a)) { a.boatType = null; changed = true; }
+        if (!("engineType" in a)) { a.engineType = null; changed = true; }
+        if (!("engineHp" in a)) { a.engineHp = null; changed = true; }
+        if (!("engineSizeLabel" in a)) { a.engineSizeLabel = null; changed = true; }
+      }
+      if (a.type === "trailer") {
+        if (!("trailerType" in a)) { a.trailerType = null; changed = true; }
+      }
+    });
+    // Missing gear fields → force setup again
+    const boat = (data.assets || []).find((a) => a.type === "boat");
+    const trailer = (data.assets || []).find((a) => a.type === "trailer");
+    const gearMissing =
+      !boat?.boatType ||
+      !boat?.engineType ||
+      !trailer?.trailerType;
+    if (gearMissing && data.setupComplete) {
+      data.setupComplete = false;
+      changed = true;
+    }
     data.tasks.forEach((t) => {
       const beforeSteps = Array.isArray(t.steps) && t.steps.length > 0;
       const beforeParts = Array.isArray(t.parts) && t.parts.length > 0;
@@ -489,6 +681,9 @@
       window.scrollTo(0, 0);
     } else if (currentView === "task") {
       navigate("track", { clearHistory: true });
+    } else if (currentView === "setup") {
+      if (state.setupComplete) navigate("more", { clearHistory: true });
+      else navigate("track", { clearHistory: true });
     } else if (currentView === "asset" || currentView === "settings" || currentView === "assets") {
       navigate("more", { clearHistory: true });
     } else {
@@ -619,7 +814,80 @@
     currentAssetId = null;
     currentTaskId = null;
     closeOverlay();
-    toast("Data reset to defaults");
+    toast("Data reset — tell us what you run");
+    navigate("setup", { clearHistory: true });
+  }
+
+  function resolveEngineSize(form) {
+    const engineType = form.engineType.value;
+    if (engineType === "none") {
+      return { engineHp: null, engineSizeLabel: null };
+    }
+    if (engineType === "electric") {
+      const kw = form.engineKw?.value?.trim();
+      if (kw) {
+        const n = Number(kw);
+        return {
+          engineHp: Number.isFinite(n) ? n : null,
+          engineSizeLabel: `${kw} kW`,
+        };
+      }
+      return { engineHp: null, engineSizeLabel: null };
+    }
+    const preset = form.engineHpPreset?.value || "";
+    if (preset === "custom") {
+      const custom = form.engineHpCustom?.value?.trim();
+      if (!custom) return { engineHp: null, engineSizeLabel: null };
+      const n = Number(custom);
+      return {
+        engineHp: Number.isFinite(n) ? n : null,
+        engineSizeLabel: `${custom} HP`,
+      };
+    }
+    if (preset === "300+") {
+      return { engineHp: 300, engineSizeLabel: "300+ HP" };
+    }
+    if (preset) {
+      const n = Number(preset);
+      return {
+        engineHp: Number.isFinite(n) ? n : null,
+        engineSizeLabel: `${preset} HP`,
+      };
+    }
+    return { engineHp: null, engineSizeLabel: null };
+  }
+
+  function saveSetup(form) {
+    const boatType = form.boatType.value;
+    const engineType = form.engineType.value;
+    const trailerType = form.trailerType.value;
+    if (!boatType || !engineType || !trailerType) {
+      toast("Pick boat, engine, and trailer types");
+      return;
+    }
+    const size = resolveEngineSize(form);
+    const boat = getBoat();
+    const trailer = getTrailer();
+    if (boat) {
+      boat.boatType = boatType;
+      boat.engineType = engineType;
+      boat.engineHp = size.engineHp;
+      boat.engineSizeLabel = size.engineSizeLabel;
+      const typeLabel = boatTypeLabel(boatType);
+      if (!boat.name || boat.name === "My Boat") {
+        boat.name = typeLabel;
+      }
+    }
+    if (trailer) {
+      trailer.trailerType = trailerType;
+      if (!trailer.name || trailer.name === "My Trailer") {
+        trailer.name =
+          trailerType === "none" ? "No trailer" : trailerTypeLabel(trailerType);
+      }
+    }
+    state.setupComplete = true;
+    save(state);
+    toast("Schedule tailored to your gear");
     navigate("track", { clearHistory: true });
   }
 
@@ -897,8 +1165,86 @@
   }
 
 
+
+  function renderSetup() {
+    const boat = getBoat() || {};
+    const trailer = getTrailer() || {};
+    const editing = state.setupComplete === true;
+    const engineType = boat.engineType || "";
+    const hpLabel = boat.engineSizeLabel || "";
+    let hpPreset = "";
+    let hpCustom = "";
+    let kwVal = "";
+    if (engineType === "electric") {
+      if (boat.engineHp != null) kwVal = String(boat.engineHp);
+    } else if (hpLabel === "300+ HP") {
+      hpPreset = "300+";
+    } else if (hpLabel && ENGINE_HP_PRESETS.includes(hpLabel.replace(" HP", ""))) {
+      hpPreset = hpLabel.replace(" HP", "");
+    } else if (boat.engineHp != null || (hpLabel && hpLabel.endsWith(" HP"))) {
+      hpPreset = "custom";
+      hpCustom = boat.engineHp != null ? String(boat.engineHp) : hpLabel.replace(" HP", "");
+    }
+
+    const hpOptions = ENGINE_HP_PRESETS.map(
+      (p) => `<option value="${p}" ${hpPreset === p ? "selected" : ""}>${p} HP</option>`
+    ).join("") + `<option value="custom" ${hpPreset === "custom" ? "selected" : ""}>Custom</option>`;
+
+    return `
+      <div class="setup-screen">
+        <div class="setup-hero">
+          <div class="setup-emoji">🚤</div>
+          <h2>${editing ? "Your gear" : "Welcome to Dockside"}</h2>
+          <p>Tell Dockside what you run — we’ll tailor maintenance.</p>
+        </div>
+        <form id="setup-form" class="setup-form">
+          <div class="form-group setup-field">
+            <label for="boatType">Boat type</label>
+            <select id="boatType" name="boatType" required class="setup-select">
+              <option value="" disabled ${!boat.boatType ? "selected" : ""}>Select boat type</option>
+              ${optionsHTML(BOAT_TYPES, boat.boatType || "")}
+            </select>
+          </div>
+          <div class="form-group setup-field">
+            <label for="engineType">Engine type</label>
+            <select id="engineType" name="engineType" required class="setup-select">
+              <option value="" disabled ${!boat.engineType ? "selected" : ""}>Select engine type</option>
+              ${optionsHTML(ENGINE_TYPES, boat.engineType || "")}
+            </select>
+          </div>
+          <div class="form-group setup-field" id="engine-size-hp" ${engineType === "electric" || engineType === "none" || !engineType ? 'style="display:none"' : ""}>
+            <label for="engineHpPreset">Engine size (HP)</label>
+            <select id="engineHpPreset" name="engineHpPreset" class="setup-select">
+              <option value="">Select HP</option>
+              ${hpOptions}
+            </select>
+          </div>
+          <div class="form-group setup-field" id="engine-size-custom" ${hpPreset === "custom" && engineType !== "electric" && engineType !== "none" ? "" : 'style="display:none"'}>
+            <label for="engineHpCustom">Custom HP</label>
+            <input type="number" id="engineHpCustom" name="engineHpCustom" min="1" step="0.1" placeholder="e.g. 175" value="${escapeAttr(hpCustom)}" class="setup-select" />
+          </div>
+          <div class="form-group setup-field" id="engine-size-kw" ${engineType === "electric" ? "" : 'style="display:none"'}>
+            <label for="engineKw">Motor size (kW) — optional</label>
+            <input type="number" id="engineKw" name="engineKw" min="0" step="0.1" placeholder="e.g. 10" value="${escapeAttr(kwVal)}" class="setup-select" />
+          </div>
+          <div class="form-group setup-field">
+            <label for="trailerType">Trailer type</label>
+            <select id="trailerType" name="trailerType" required class="setup-select">
+              <option value="" disabled ${!trailer.trailerType ? "selected" : ""}>Select trailer type</option>
+              ${optionsHTML(TRAILER_TYPES, trailer.trailerType || "")}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block setup-cta">
+            ${editing ? "Save gear" : "Save & see my schedule"}
+          </button>
+          ${editing ? `<button type="button" class="btn btn-ghost btn-block" data-action="go-back" style="margin-top:8px">Cancel</button>` : ""}
+        </form>
+      </div>
+    `;
+  }
+
   function renderTrack() {
-    let tasks = state.tasks;
+    let tasks = visibleTasks(state.tasks);
     if (filterAssetId !== "all") {
       tasks = tasks.filter((t) => t.assetId === filterAssetId);
     }
@@ -911,7 +1257,33 @@
       ),
     ].join("");
 
+    const summary = gearSummaryLabel();
+    const basedOn = state.setupComplete
+      ? `<p class="gear-based">Based on your ${escapeHtml(summary)}</p>`
+      : "";
+    const incompleteBanner = !state.setupComplete
+      ? `<div class="setup-banner" data-action="goto-setup">
+           <div class="setup-banner-body">
+             <strong>Complete your gear profile</strong>
+             <span>Tell Dockside what you run — we’ll tailor maintenance.</span>
+           </div>
+           <span class="chevron">›</span>
+         </div>`
+      : "";
+    const gearChip = state.setupComplete
+      ? `<div class="gear-chip-row">
+           <button type="button" class="gear-chip" data-action="goto-setup">
+             <span class="gear-chip-icon">⚓</span>
+             <span class="gear-chip-text">${escapeHtml(summary)}</span>
+             <span class="gear-chip-edit">Edit</span>
+           </button>
+         </div>`
+      : "";
+
     return `
+      ${incompleteBanner}
+      ${gearChip}
+      ${basedOn}
       <div class="stats-strip">
         <div class="stat-pill overdue"><div class="num">${groups.overdue.length}</div><div class="lbl">Overdue</div></div>
         <div class="stat-pill due-soon"><div class="num">${groups.dueSoon.length}</div><div class="lbl">Due soon</div></div>
@@ -927,7 +1299,7 @@
   }
 
   function renderGuides() {
-    let tasks = state.tasks.filter((t) => Array.isArray(t.steps) && t.steps.length > 0);
+    let tasks = visibleTasks(state.tasks).filter((t) => Array.isArray(t.steps) && t.steps.length > 0);
     if (guidesFilter === "boat" || guidesFilter === "trailer") {
       tasks = tasks.filter((t) => {
         const a = state.assets.find((x) => x.id === t.assetId);
@@ -975,7 +1347,7 @@
       byAsset[a.id] = [];
     });
 
-    state.tasks.forEach((t) => {
+    visibleTasks(state.tasks).forEach((t) => {
       (t.parts || []).forEach((pt) => {
         const bucket = byAsset[t.assetId] || (byAsset[t.assetId] = []);
         bucket.push({ part: pt, task: t });
@@ -1018,9 +1390,18 @@
   }
 
   function renderMore() {
-    const overdue = state.tasks.filter((t) => statusOf(t) === "overdue" || !t.lastDoneAt).length;
+    const overdue = visibleTasks(state.tasks).filter((t) => statusOf(t) === "overdue" || !t.lastDoneAt).length;
+    const summary = state.setupComplete ? gearSummaryLabel() : "Not set up yet";
     return `
       <div class="section-label">Menu</div>
+      <div class="more-menu-item" data-action="goto-setup">
+        <div class="mm-icon">⚓</div>
+        <div class="mm-body">
+          <div class="mm-title">Your gear</div>
+          <div class="mm-sub">${escapeHtml(summary)}</div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
       <div class="more-menu-item" data-action="goto-assets">
         <div class="mm-icon">🚤</div>
         <div class="mm-body">
@@ -1048,8 +1429,8 @@
       <div class="section-label">Your assets</div>
       ${state.assets
         .map((a) => {
-          const n = state.tasks.filter((t) => t.assetId === a.id).length;
-          const overdue = state.tasks.filter((t) => t.assetId === a.id && (statusOf(t) === "overdue" || !t.lastDoneAt)).length;
+          const n = visibleTasks(state.tasks).filter((t) => t.assetId === a.id).length;
+          const overdue = visibleTasks(state.tasks).filter((t) => t.assetId === a.id && (statusOf(t) === "overdue" || !t.lastDoneAt)).length;
           return `
             <div class="card" style="cursor:pointer" data-action="goto-asset" data-id="${a.id}">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
@@ -1080,12 +1461,25 @@
     if (!asset) {
       return `<div class="empty-state"><h3>Asset not found</h3><button class="btn btn-secondary" data-action="goto-assets">Back</button></div>`;
     }
-    const tasks = state.tasks.filter((t) => t.assetId === asset.id);
+    const tasks = visibleTasks(state.tasks).filter((t) => t.assetId === asset.id);
     const groups = groupSections(tasks);
+    const gearBits = [];
+    if (asset.type === "boat") {
+      if (asset.boatType) gearBits.push(boatTypeLabel(asset.boatType));
+      if (asset.engineType === "none") gearBits.push("No engine");
+      else if (asset.engineType) {
+        const eng = engineTypeLabel(asset.engineType);
+        gearBits.push(asset.engineSizeLabel ? `${asset.engineSizeLabel} ${eng}` : eng);
+      }
+    }
+    if (asset.type === "trailer" && asset.trailerType) {
+      gearBits.push(trailerTypeLabel(asset.trailerType));
+    }
     return `
       <div class="asset-hero">
         <h2>${escapeHtml(asset.name)}</h2>
         <span class="type-tag">${escapeHtml(asset.type)}</span>
+        ${gearBits.length ? `<div class="notes">${escapeHtml(gearBits.join(" · "))}</div>` : ""}
         ${asset.notes ? `<div class="notes">${escapeHtml(asset.notes)}</div>` : ""}
         <div class="meter-row">
           ${asset.type === "boat" ? `<div><span>Hour meter </span><strong>${asset.hourMeter ?? "—"}</strong></div>` : ""}
@@ -1181,6 +1575,11 @@
     return `
       <form id="settings-form">
         <div class="settings-block">
+          <h3>⚓ Your gear</h3>
+          <p class="hint">${state.setupComplete ? escapeHtml(gearSummaryLabel()) : "Not set up yet"}</p>
+          <button type="button" class="btn btn-secondary btn-block" data-action="goto-setup">Edit boat, engine & trailer</button>
+        </div>
+        <div class="settings-block">
           <h3>🚤 Assets</h3>
           <p class="hint">Edit names, notes, and meters. Changes save when you tap Save assets.</p>
           ${assetForms}
@@ -1211,6 +1610,7 @@
 
 
   function headerTitle() {
+    if (currentView === "setup") return state.setupComplete ? "Your gear" : "Setup";
     if (currentView === "track") return "Dockside";
     if (currentView === "guides") return "Guides";
     if (currentView === "parts") return "Parts";
@@ -1234,9 +1634,11 @@
     const tagline = document.getElementById("header-tagline");
     title.textContent = headerTitle();
     tagline.classList.toggle("hidden", currentView !== "track");
+    tagline.textContent = "Track. Fix. Buy.";
 
     let html = "";
-    if (currentView === "track") html = renderTrack();
+    if (currentView === "setup") html = renderSetup();
+    else if (currentView === "track") html = renderTrack();
     else if (currentView === "guides") html = renderGuides();
     else if (currentView === "parts") html = renderParts();
     else if (currentView === "more") html = renderMore();
@@ -1246,6 +1648,8 @@
     else if (currentView === "settings") html = renderSettings();
 
     main.innerHTML = html;
+
+    document.getElementById("app").classList.toggle("setup-mode", currentView === "setup" && !state.setupComplete);
 
     document.querySelectorAll(".nav-btn").forEach((btn) => {
       const v = btn.dataset.view;
@@ -1268,13 +1672,6 @@
       btn.classList.toggle("active", !!active);
     });
 
-    const back = document.getElementById("btn-back");
-    const showBack = ["asset", "task", "settings", "assets"].includes(currentView);
-    back.classList.toggle("hidden", !showBack);
-
-    const addBtn = document.getElementById("btn-add");
-    addBtn.classList.toggle("hidden", !["track", "asset", "assets"].includes(currentView));
-
     const sf = document.getElementById("settings-form");
     if (sf) {
       sf.onsubmit = (e) => {
@@ -1282,12 +1679,44 @@
         saveAssets(e.target);
       };
     }
+    const setupForm = document.getElementById("setup-form");
+    if (setupForm) {
+      setupForm.onsubmit = (e) => {
+        e.preventDefault();
+        saveSetup(e.target);
+      };
+      const engSel = setupForm.engineType;
+      const hpPreset = setupForm.engineHpPreset;
+      const syncEngineSize = () => {
+        const et = engSel.value;
+        const hpBlock = document.getElementById("engine-size-hp");
+        const customBlock = document.getElementById("engine-size-custom");
+        const kwBlock = document.getElementById("engine-size-kw");
+        if (hpBlock) hpBlock.style.display = et && et !== "none" && et !== "electric" ? "" : "none";
+        if (kwBlock) kwBlock.style.display = et === "electric" ? "" : "none";
+        if (customBlock) {
+          customBlock.style.display =
+            et && et !== "none" && et !== "electric" && hpPreset?.value === "custom" ? "" : "none";
+        }
+      };
+      if (engSel) engSel.addEventListener("change", syncEngineSize);
+      if (hpPreset) hpPreset.addEventListener("change", syncEngineSize);
+    }
     const imp = document.getElementById("import-file");
     if (imp) {
       imp.onchange = () => {
         if (imp.files?.[0]) importJSON(imp.files[0]);
       };
     }
+
+    // Back / add / nav visibility for setup
+    const back = document.getElementById("btn-back");
+    const showBack =
+      ["asset", "task", "settings", "assets"].includes(currentView) ||
+      (currentView === "setup" && state.setupComplete);
+    back.classList.toggle("hidden", !showBack);
+    const addBtn = document.getElementById("btn-add");
+    addBtn.classList.toggle("hidden", currentView === "setup" || !["track", "asset", "assets"].includes(currentView));
   }
 
   function onClick(e) {
@@ -1344,6 +1773,9 @@
       case "goto-settings":
         navigate("settings", { pushHistory: true });
         break;
+      case "goto-setup":
+        navigate("setup", { pushHistory: state.setupComplete && currentView !== "setup" });
+        break;
       case "go-back":
         goBack();
         break;
@@ -1381,11 +1813,14 @@
     document.getElementById("btn-add").addEventListener("click", () => openTaskForm(null));
 
     const hash = location.hash.replace("#", "");
-    if (hash === "settings") currentView = "settings";
+    if (needsSetup(state)) {
+      currentView = "setup";
+    } else if (hash === "settings") currentView = "settings";
     else if (hash === "assets") currentView = "assets";
     else if (hash === "guides") currentView = "guides";
     else if (hash === "parts") currentView = "parts";
     else if (hash === "more") currentView = "more";
+    else if (hash === "setup") currentView = "setup";
 
     render();
   }
