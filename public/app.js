@@ -9,7 +9,7 @@
   const STORAGE_KEY = "boatTrailerMaint.v1";
   const DUE_SOON_DAYS = 14;
 
-  const BUILD = "v1-harbor";
+  const BUILD = "v1-home";
 
 
   const ICON_ANCHOR = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2c-1.1 0-2 .7-2 1.8V5c-3 .5-5 2.2-5 5.2 0 1.2.4 2.3 1.2 3.1L5 21h2.5l1.1-4.2c1.1.4 2.2.6 3.4.6s2.3-.2 3.4-.6L16.5 21H19l-1.2-5.7c.8-.8 1.2-1.9 1.2-3.1 0-3-2-4.7-5-5.2V3.8C14 2.7 13.1 2 12 2zm0 6.2c2.2 0 3.5 1 3.5 2.5S14.2 13.2 12 13.2 8.5 12.2 8.5 10.7 9.8 8.2 12 8.2z"/></svg>`;
@@ -1760,21 +1760,173 @@
     `;
   }
 
+  function homeAttentionRowHTML(task, opts = {}) {
+    const asset = state.assets.find((a) => a.id === task.assetId);
+    const st = statusOf(task);
+    const showAsset = opts.showAsset !== false;
+    const assetBadge = showAsset && asset
+      ? `<span class="home-att-asset">${escapeHtml(asset.type === "boat" ? "Boat" : asset.type === "trailer" ? "Trailer" : asset.name)}</span>`
+      : "";
+    return `
+      <div class="home-att-row ${st}">
+        <button type="button" class="home-att-main" data-action="open-task" data-id="${task.id}">
+          <div class="home-att-text">
+            <div class="home-att-title">${escapeHtml(task.title)}</div>
+            <div class="home-att-meta">
+              <span class="home-att-due">${escapeHtml(relativeLabel(task))}</span>
+              ${assetBadge}
+            </div>
+          </div>
+          <span class="chevron" aria-hidden="true">›</span>
+        </button>
+        <button type="button" class="btn-done home-att-done" data-action="mark-done" data-id="${task.id}" title="Mark done today">Done</button>
+      </div>`;
+  }
+
+  function renderTrackHome(groups, filterChipsHTML) {
+    const overdueN = groups.overdue.length;
+    const dueSoonN = groups.dueSoon.length;
+    const upcomingN = groups.upcoming.length;
+
+    let statusTone = "good";
+    let statusLine = "Looking good";
+    if (overdueN > 0) {
+      statusTone = "behind";
+      statusLine = "You're behind";
+    } else if (dueSoonN > 0) {
+      statusTone = "soon";
+      statusLine = "Due soon";
+    }
+
+    const countBits = [];
+    if (overdueN) countBits.push(`${overdueN} overdue`);
+    if (dueSoonN) countBits.push(`${dueSoonN} due soon`);
+    if (!countBits.length && upcomingN) countBits.push(`${upcomingN} scheduled`);
+    if (!countBits.length) countBits.push("Nothing due");
+    const countLine = countBits.join(" · ");
+
+    const featured =
+      groups.overdue[0] || groups.dueSoon[0] || groups.upcoming[0] || null;
+
+    const attention = [...groups.overdue, ...groups.dueSoon].filter(
+      (t) => !featured || t.id !== featured.id
+    );
+    const upcomingRest = groups.upcoming.filter(
+      (t) => !featured || t.id !== featured.id
+    );
+
+    const summary = gearSummaryLabel();
+    const showAsset = filterAssetId === "all";
+
+    let featuredHTML = "";
+    if (featured) {
+      const asset = state.assets.find((a) => a.id === featured.assetId);
+      const st = statusOf(featured);
+      const assetLabel = asset
+        ? asset.type === "boat"
+          ? "Boat"
+          : asset.type === "trailer"
+            ? "Trailer"
+            : asset.name
+        : "";
+      const hasGuide = Array.isArray(featured.steps) && featured.steps.length > 0;
+      const howtoAction = hasGuide ? "open-guide" : "open-task";
+      featuredHTML = `
+        <section class="home-upnext">
+          <div class="home-kicker">Up next</div>
+          <article class="home-featured ${st}">
+            <div class="home-featured-glow" aria-hidden="true"></div>
+            <div class="home-featured-top">
+              ${assetLabel ? `<span class="home-featured-asset">${escapeHtml(assetLabel)}</span>` : ""}
+              <span class="home-featured-due">${escapeHtml(relativeLabel(featured))}</span>
+            </div>
+            <h2 class="home-featured-title">${escapeHtml(featured.title)}</h2>
+            <p class="home-featured-sub">${escapeHtml(intervalLabel(featured))}${featured.category ? ` · ${escapeHtml(featured.category)}` : ""}</p>
+            <div class="home-featured-actions">
+              <button type="button" class="btn btn-primary" data-action="mark-done" data-id="${featured.id}">Mark done</button>
+              <button type="button" class="btn btn-secondary" data-action="${howtoAction}" data-id="${featured.id}">How-to</button>
+            </div>
+          </article>
+        </section>`;
+    }
+
+    let attentionHTML = "";
+    if (attention.length) {
+      attentionHTML = `
+        <section class="home-attention">
+          <div class="section-label">Needs attention <span class="count">${attention.length}</span></div>
+          ${attention.map((t) => homeAttentionRowHTML(t, { showAsset })).join("")}
+        </section>`;
+    }
+
+    let scheduledHTML = "";
+    if (upcomingRest.length) {
+      scheduledHTML = `
+        <section class="home-scheduled-wrap">
+          <details class="home-scheduled">
+            <summary>
+              <span>See all scheduled</span>
+              <span class="count">${upcomingRest.length}</span>
+            </summary>
+            <div class="home-scheduled-list">
+              ${upcomingRest.map((t) => homeAttentionRowHTML(t, { showAsset })).join("")}
+            </div>
+          </details>
+        </section>`;
+    }
+
+    // When looking good with no attention and we already featured one upcoming, disclosure covers the rest.
+    // When NO featured at all — rewarding empty.
+    let clearHTML = "";
+    if (!featured) {
+      clearHTML = `
+        <section class="home-allclear">
+          <div class="home-allclear-icon" aria-hidden="true">✓</div>
+          <h2>All clear</h2>
+          <p>Your boat and trailer are on track. Enjoy the water.</p>
+        </section>`;
+    } else if (statusTone === "good" && !attention.length && !upcomingRest.length) {
+      clearHTML = `
+        <p class="home-clear-note">That's the only job on the books — you're in good shape.</p>`;
+    }
+
+    return `
+      <section class="home-status ${statusTone}">
+        <div class="home-status-line">${statusLine}</div>
+        <div class="home-status-counts">${escapeHtml(countLine)}</div>
+        <div class="home-identity">
+          <span class="home-identity-text">${escapeHtml(summary)}</span>
+          <button type="button" class="home-identity-edit" data-action="goto-setup">Edit</button>
+        </div>
+        <div class="home-status-meter" aria-hidden="true">
+          <span class="home-meter-fill"></span>
+        </div>
+      </section>
+      ${filterChipsHTML}
+      ${featuredHTML}
+      ${attentionHTML}
+      ${scheduledHTML}
+      ${clearHTML}
+    `;
+  }
+
   function renderTrack() {
     let tasks = visibleTasks(state.tasks);
     if (filterAssetId !== "all") {
       tasks = tasks.filter((t) => t.assetId === filterAssetId);
     }
     const groups = groupSections(tasks);
-    const chips = [
-      `<button type="button" class="chip ${filterAssetId === "all" ? "active" : ""}" data-action="filter-asset" data-id="all">All</button>`,
-      ...state.assets.map(
-        (a) =>
-          `<button type="button" class="chip ${filterAssetId === a.id ? "active" : ""}" data-action="filter-asset" data-id="${a.id}">${escapeHtml(a.name)}</button>`
-      ),
-    ].join("");
+    const incomplete = needsSetup(state);
 
-    return `
+    if (incomplete) {
+      const chips = [
+        `<button type="button" class="chip ${filterAssetId === "all" ? "active" : ""}" data-action="filter-asset" data-id="all">All</button>`,
+        ...state.assets.map(
+          (a) =>
+            `<button type="button" class="chip ${filterAssetId === a.id ? "active" : ""}" data-action="filter-asset" data-id="${a.id}">${escapeHtml(a.name)}</button>`
+        ),
+      ].join("");
+      return `
       ${yourGearCardHTML()}
       <div class="stats-strip">
         <div class="stat-pill overdue"><div class="num">${groups.overdue.length}</div><div class="lbl">Overdue</div></div>
@@ -1788,6 +1940,34 @@
       </div>
       ${sectionsHTML(groups, "Nothing due in this filter. Add a task or check another asset.", { showAsset: filterAssetId === "all" })}
     `;
+    }
+
+    // Post-setup: premium status + next move home
+    let filterChipsHTML = "";
+    if (state.assets.length > 2) {
+      filterChipsHTML = `<div class="asset-chips">${[
+        `<button type="button" class="chip ${filterAssetId === "all" ? "active" : ""}" data-action="filter-asset" data-id="all">All</button>`,
+        ...state.assets.map(
+          (a) =>
+            `<button type="button" class="chip ${filterAssetId === a.id ? "active" : ""}" data-action="filter-asset" data-id="${a.id}">${escapeHtml(a.name)}</button>`
+        ),
+      ].join("")}</div>`;
+    } else if (state.assets.length === 2) {
+      const boat = state.assets.find((a) => a.type === "boat");
+      const trailer = state.assets.find((a) => a.type === "trailer");
+      if (boat && trailer) {
+        filterChipsHTML = `
+          <div class="home-segment" role="group" aria-label="Filter by asset">
+            <button type="button" class="home-seg ${filterAssetId === "all" ? "active" : ""}" data-action="filter-asset" data-id="all">All</button>
+            <button type="button" class="home-seg ${filterAssetId === boat.id ? "active" : ""}" data-action="filter-asset" data-id="${boat.id}">Boat</button>
+            <button type="button" class="home-seg ${filterAssetId === trailer.id ? "active" : ""}" data-action="filter-asset" data-id="${trailer.id}">Trailer</button>
+          </div>`;
+      }
+      // else: hide filters (odd asset mix with only 2)
+    }
+    // 0–1 assets: hide filters
+
+    return renderTrackHome(groups, filterChipsHTML);
   }
 
     function renderGuides() {
