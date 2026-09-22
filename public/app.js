@@ -9,7 +9,7 @@
   const STORAGE_KEY = "boatTrailerMaint.v1";
   const DUE_SOON_DAYS = 14;
 
-  const BUILD = "v1-oem-intervals";
+  const BUILD = "v1-engines";
 
   // Amazon Associates tag — set when approved (e.g. "dockside-20"); leave empty until then.
   const AMAZON_ASSOCIATE_TAG = "";
@@ -84,7 +84,40 @@
     { value: "none", label: "None / sail only" },
   ];
 
-  const ENGINE_HP_PRESETS = ["9.9", "25", "40", "60", "90", "115", "150", "200", "250", "300+"];
+  const ENGINE_HP_PRESETS = [
+    "9.9", "15", "20", "25", "30", "40", "50", "60", "70", "75",
+    "90", "100", "115", "130", "140", "150", "175", "200", "225", "250", "300+",
+  ];
+
+  /** Common outboards / drives — pick to prefills make/model + HP. Sorted brand then HP. */
+  const POPULAR_ENGINES = [
+    { id: "honda-bf115", brand: "Honda", model: "BF115", label: "Honda BF115 (115 HP)", engineType: "outboard", hp: "115" },
+    { id: "honda-bf140", brand: "Honda", model: "BF140", label: "Honda BF140 (140 HP)", engineType: "outboard", hp: "140" },
+    { id: "honda-bf150", brand: "Honda", model: "BF150", label: "Honda BF150 (150 HP)", engineType: "outboard", hp: "150" },
+    { id: "honda-bf200", brand: "Honda", model: "BF200", label: "Honda BF200 (200 HP)", engineType: "outboard", hp: "200" },
+    { id: "merc-115-fs", brand: "Mercury", model: "115 FourStroke", label: "Mercury 115 FourStroke (115 HP)", engineType: "outboard", hp: "115" },
+    { id: "merc-150-fs", brand: "Mercury", model: "150 FourStroke", label: "Mercury 150 FourStroke (150 HP)", engineType: "outboard", hp: "150" },
+    { id: "merc-200-fs", brand: "Mercury", model: "200 FourStroke", label: "Mercury 200 FourStroke (200 HP)", engineType: "outboard", hp: "200" },
+    { id: "merc-250-verado", brand: "Mercury", model: "250 Verado", label: "Mercury 250 Verado (250 HP)", engineType: "outboard", hp: "250" },
+    { id: "merc-300-verado", brand: "Mercury", model: "300 Verado", label: "Mercury 300 Verado (300+ HP)", engineType: "outboard", hp: "300+" },
+    { id: "mercruiser-4-5", brand: "MerCruiser", model: "4.5", label: "MerCruiser 4.5 (250 HP)", engineType: "sterndrive", hp: "250" },
+    { id: "mercruiser-6-2", brand: "MerCruiser", model: "6.2", label: "MerCruiser 6.2 (300+ HP)", engineType: "sterndrive", hp: "300+" },
+    { id: "mercruiser-8-2-ib", brand: "MerCruiser", model: "8.2 Inboard", label: "MerCruiser 8.2 Inboard (300+ HP)", engineType: "inboard", hp: "300+" },
+    { id: "suzuki-df115", brand: "Suzuki", model: "DF115", label: "Suzuki DF115 (115 HP)", engineType: "outboard", hp: "115" },
+    { id: "suzuki-df140", brand: "Suzuki", model: "DF140", label: "Suzuki DF140 (140 HP)", engineType: "outboard", hp: "140" },
+    { id: "suzuki-df150", brand: "Suzuki", model: "DF150", label: "Suzuki DF150 (150 HP)", engineType: "outboard", hp: "150" },
+    { id: "suzuki-df175", brand: "Suzuki", model: "DF175", label: "Suzuki DF175 (175 HP)", engineType: "outboard", hp: "175" },
+    { id: "suzuki-df200", brand: "Suzuki", model: "DF200", label: "Suzuki DF200 (200 HP)", engineType: "outboard", hp: "200" },
+    { id: "tohatsu-90", brand: "Tohatsu", model: "90", label: "Tohatsu 90 (90 HP)", engineType: "outboard", hp: "90" },
+    { id: "tohatsu-115", brand: "Tohatsu", model: "115", label: "Tohatsu 115 (115 HP)", engineType: "outboard", hp: "115" },
+    { id: "tohatsu-140", brand: "Tohatsu", model: "140", label: "Tohatsu 140 (140 HP)", engineType: "outboard", hp: "140" },
+    { id: "yamaha-f90", brand: "Yamaha", model: "F90", label: "Yamaha F90 (90 HP)", engineType: "outboard", hp: "90" },
+    { id: "yamaha-f115", brand: "Yamaha", model: "F115", label: "Yamaha F115 (115 HP)", engineType: "outboard", hp: "115" },
+    { id: "yamaha-f150", brand: "Yamaha", model: "F150", label: "Yamaha F150 (150 HP)", engineType: "outboard", hp: "150" },
+    { id: "yamaha-f200", brand: "Yamaha", model: "F200", label: "Yamaha F200 (200 HP)", engineType: "outboard", hp: "200" },
+    { id: "yamaha-f250", brand: "Yamaha", model: "F250", label: "Yamaha F250 (250 HP)", engineType: "outboard", hp: "250" },
+    { id: "yamaha-f300", brand: "Yamaha", model: "F300", label: "Yamaha F300 (300+ HP)", engineType: "outboard", hp: "300+" },
+  ];
 
   const TRAILER_TYPES = [
     { value: "bunk", label: "Bunk trailer" },
@@ -117,6 +150,33 @@
   function boatTypeLabel(v) { return labelFor(BOAT_TYPES, v); }
   function engineTypeLabel(v) { return labelFor(ENGINE_TYPES, v); }
   function trailerTypeLabel(v) { return labelFor(TRAILER_TYPES, v); }
+
+  function popularEngineMakeModel(eng) {
+    if (!eng) return "";
+    return `${eng.brand} ${eng.model}`.trim();
+  }
+
+  function findPopularEngineByMakeModel(makeModel) {
+    const mm = (makeModel || "").trim().toLowerCase();
+    if (!mm) return null;
+    return (
+      POPULAR_ENGINES.find((e) => popularEngineMakeModel(e).toLowerCase() === mm) ||
+      POPULAR_ENGINES.find((e) => e.label.toLowerCase().startsWith(mm)) ||
+      null
+    );
+  }
+
+  function popularEngineOptionsHTML(selectedId) {
+    const opts = POPULAR_ENGINES.map(
+      (e) =>
+        `<option value="${escapeAttr(e.id)}" ${selectedId === e.id ? "selected" : ""}>${escapeHtml(e.label)}</option>`
+    ).join("");
+    return (
+      `<option value="">Select a common engine…</option>` +
+      opts +
+      `<option value="other" ${selectedId === "other" ? "selected" : ""}>Other / I’ll type it</option>`
+    );
+  }
 
   function getBoat() {
     return state.assets.find((a) => a.type === "boat") || null;
@@ -2466,6 +2526,13 @@
       (p) => `<option value="${p}" ${hpPreset === p ? "selected" : ""}>${p} HP</option>`
     ).join("") + `<option value="custom" ${hpPreset === "custom" ? "selected" : ""}>Custom</option>`;
 
+    const matchedPopular = findPopularEngineByMakeModel(boat.engineMakeModel);
+    const popularSelectedId = matchedPopular
+      ? matchedPopular.id
+      : boat.engineMakeModel
+        ? "other"
+        : "";
+
     return `
       <div class="setup-screen">
         <div class="setup-hero">
@@ -2492,6 +2559,16 @@
               ${optionsHTML(ENGINE_TYPES, boat.engineType || "")}
             </select>
           </div>
+          <div class="form-group setup-field" id="engine-popular" ${engineType === "none" || !engineType ? 'style="display:none"' : ""}>
+            <label for="popularEngine">Popular engines</label>
+            <select id="popularEngine" name="popularEngine" class="setup-select">
+              ${popularEngineOptionsHTML(popularSelectedId)}
+            </select>
+          </div>
+          <div class="form-group setup-field" id="engine-make-model" ${engineType === "none" || !engineType ? 'style="display:none"' : ""}>
+            <label for="engineMakeModel">Engine make / model <span class="opt-label">encouraged</span></label>
+            <input type="text" id="engineMakeModel" name="engineMakeModel" class="setup-select" maxlength="80" placeholder="e.g. Yamaha F150 / Suzuki DF140" value="${escapeAttr(boat.engineMakeModel || "")}" />
+          </div>
           <div class="form-group setup-field" id="engine-size-hp" ${engineType === "electric" || engineType === "none" || !engineType ? 'style="display:none"' : ""}>
             <label for="engineHpPreset">Engine size (HP)</label>
             <select id="engineHpPreset" name="engineHpPreset" class="setup-select">
@@ -2506,10 +2583,6 @@
           <div class="form-group setup-field" id="engine-size-kw" ${engineType === "electric" ? "" : 'style="display:none"'}>
             <label for="engineKw">Motor size (kW) — optional</label>
             <input type="number" id="engineKw" name="engineKw" min="0" step="0.1" placeholder="e.g. 10" value="${escapeAttr(kwVal)}" class="setup-select" />
-          </div>
-          <div class="form-group setup-field" id="engine-make-model" ${engineType === "none" || !engineType ? 'style="display:none"' : ""}>
-            <label for="engineMakeModel">Engine make / model <span class="opt-label">encouraged</span></label>
-            <input type="text" id="engineMakeModel" name="engineMakeModel" class="setup-select" maxlength="80" placeholder="e.g. Yamaha F150" value="${escapeAttr(boat.engineMakeModel || "")}" />
           </div>
           <div class="form-group setup-field">
             <label for="trailerType">Trailer type</label>
@@ -3285,19 +3358,39 @@
       };
       const engSel = setupForm.engineType;
       const hpPreset = setupForm.engineHpPreset;
+      const popularSel = setupForm.popularEngine;
       const syncEngineSize = () => {
         const et = engSel.value;
         const hpBlock = document.getElementById("engine-size-hp");
         const customBlock = document.getElementById("engine-size-custom");
         const kwBlock = document.getElementById("engine-size-kw");
         const engMake = document.getElementById("engine-make-model");
+        const engPopular = document.getElementById("engine-popular");
         if (hpBlock) hpBlock.style.display = et && et !== "none" && et !== "electric" ? "" : "none";
         if (kwBlock) kwBlock.style.display = et === "electric" ? "" : "none";
         if (engMake) engMake.style.display = et && et !== "none" ? "" : "none";
+        if (engPopular) engPopular.style.display = et && et !== "none" ? "" : "none";
         if (customBlock) {
           customBlock.style.display =
             et && et !== "none" && et !== "electric" && hpPreset?.value === "custom" ? "" : "none";
         }
+      };
+      const applyPopularEngine = () => {
+        if (!popularSel) return;
+        const id = popularSel.value;
+        if (!id || id === "other") return;
+        const eng = POPULAR_ENGINES.find((e) => e.id === id);
+        if (!eng) return;
+        const makeInput = setupForm.engineMakeModel;
+        if (makeInput) makeInput.value = popularEngineMakeModel(eng);
+        // User picked from catalog — apply catalog drive class
+        if (eng.engineType && engSel) {
+          engSel.value = eng.engineType;
+        }
+        if (hpPreset && eng.hp && ENGINE_HP_PRESETS.includes(eng.hp)) {
+          hpPreset.value = eng.hp;
+        }
+        syncEngineSize();
       };
       const syncTrailerMake = () => {
         const tt = setupForm.trailerType?.value;
@@ -3306,6 +3399,7 @@
       };
       if (engSel) engSel.addEventListener("change", syncEngineSize);
       if (hpPreset) hpPreset.addEventListener("change", syncEngineSize);
+      if (popularSel) popularSel.addEventListener("change", applyPopularEngine);
       if (setupForm.trailerType) setupForm.trailerType.addEventListener("change", syncTrailerMake);
     }
     const imp = document.getElementById("import-file");
