@@ -59,7 +59,7 @@ Opening `public/index.html` via `file://` usually works (`localStorage` is fine)
 | **Task detail** | Schedule / last done / Mark done · How-to steps · Parts for this job with **Shop** |
 | **Log completion** | Bottom sheet: date, optional hours/miles/cost/notes |
 | **Add / Edit task** | Intervals, priority, category, last done |
-| **Settings** | Rename assets, meters, export/import JSON, reset seed |
+| **Settings** | Reminders (browser), rename assets, meters, export/import JSON, reset seed |
 
 Soft Pro teaser on Guides and Parts: “Pro unlocks full guide library + smarter parts picks — coming soon.”
 
@@ -84,7 +84,8 @@ Settings → **Export JSON**. **Import JSON** restores on the same or another br
 - Day-based due dates drive the dashboard; optional hour intervals are stored for reference; logging hours/miles can update the asset meter.
 - Shop buttons use curated marine Amazon search queries (gear-aware make/model when set).
 - Affiliate-ready: set `AMAZON_ASSOCIATE_TAG` in `app.js` when Amazon Associates is approved; empty tag keeps clean search URLs (no empty `tag=`).
-- Build id: `v1-shop-links` (see `BUILD` in `app.js`).
+- Browser **Reminders** (opt-in): Notifications API nudges for overdue / due-soon jobs when the tab loads, becomes visible, or on a light interval while open. Defaults off; Gear / Settings → Reminders. No email/SMS/server push.
+- Build id: `v1-reminders` (see `BUILD` in `app.js`).
 
 ## License
 

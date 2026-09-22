@@ -2377,3 +2377,77 @@ h3 .sec-mark:first-child {
   margin: 8px 4px 16px;
   line-height: 1.4;
 }
+
+
+/* ── Reminders (v1-reminders) ── */
+.reminders-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.reminders-chip.on {
+  color: var(--seafoam);
+  background: rgba(94, 234, 212, 0.12);
+  border: 1px solid rgba(94, 234, 212, 0.22);
+}
+.reminders-chip.warn {
+  color: var(--amber);
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.22);
+}
+
+.reminder-card .reminder-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.reminder-card .reminder-status {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.reminder-card .reminder-status.on {
+  color: var(--seafoam);
+}
+.reminder-card .reminder-denied,
+.reminder-card .reminder-unsupported {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--amber);
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.18);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin: 0 0 12px;
+}
+.reminder-card .reminder-unsupported {
+  color: var(--text-muted);
+  background: rgba(148, 163, 184, 0.08);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+.reminder-window {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(94, 234, 212, 0.1);
+}
+.reminder-window-label {
+  font-size: 0.72rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.reminder-day-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

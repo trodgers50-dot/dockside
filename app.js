@@ -9,10 +9,55 @@
   const STORAGE_KEY = "boatTrailerMaint.v1";
   const DUE_SOON_DAYS = 14;
 
-  const BUILD = "v1-shop-links";
+  const BUILD = "v1-reminders";
 
   // Amazon Associates tag — set when approved (e.g. "dockside-20"); leave empty until then.
   const AMAZON_ASSOCIATE_TAG = "";
+
+  const REMINDER_SCAN_MS = 45 * 60 * 1000; // throttle scans unless force
+  const REMINDER_INTERVAL_MS = 20 * 60 * 1000; // light poll while tab open
+  let reminderIntervalId = null;
+
+  function defaultReminders() {
+    return {
+      enabled: false,
+      permission: "default",
+      dueSoonDays: 7,
+      lastRunAt: null,
+      notified: {},
+    };
+  }
+
+  function ensureReminders(data) {
+    const d = data || state;
+    if (!d.reminders || typeof d.reminders !== "object") {
+      d.reminders = defaultReminders();
+      return d.reminders;
+    }
+    const r = d.reminders;
+    if (typeof r.enabled !== "boolean") r.enabled = false;
+    if (typeof r.permission !== "string") r.permission = "default";
+    if (typeof r.dueSoonDays !== "number" || ![3, 7, 14].includes(r.dueSoonDays)) {
+      r.dueSoonDays = 7;
+    }
+    if (!("lastRunAt" in r)) r.lastRunAt = null;
+    if (!r.notified || typeof r.notified !== "object") r.notified = {};
+    return r;
+  }
+
+  function notificationsSupported() {
+    return typeof window !== "undefined" && "Notification" in window;
+  }
+
+  function syncReminderPermission(data) {
+    const r = ensureReminders(data);
+    if (!notificationsSupported()) {
+      r.permission = "unsupported";
+      return r.permission;
+    }
+    r.permission = Notification.permission;
+    return r.permission;
+  }
 
 
   const ICON_ANCHOR = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2c-1.1 0-2 .7-2 1.8V5c-3 .5-5 2.2-5 5.2 0 1.2.4 2.3 1.2 3.1L5 21h2.5l1.1-4.2c1.1.4 2.2.6 3.4.6s2.3-.2 3.4-.6L16.5 21H19l-1.2-5.7c.8-.8 1.2-1.9 1.2-3.1 0-3-2-4.7-5-5.2V3.8C14 2.7 13.1 2 12 2zm0 6.2c2.2 0 3.5 1 3.5 2.5S14.2 13.2 12 13.2 8.5 12.2 8.5 10.7 9.8 8.2 12 8.2z"/></svg>`;
@@ -1326,6 +1371,7 @@
       assets,
       tasks,
       logs: [],
+      reminders: defaultReminders(),
       createdAt: new Date().toISOString(),
     };
   }
@@ -1337,6 +1383,10 @@
       data.setupComplete = false;
       changed = true;
     }
+    const beforeRem = JSON.stringify(data.reminders || null);
+    ensureReminders(data);
+    syncReminderPermission(data);
+    if (JSON.stringify(data.reminders) !== beforeRem) changed = true;
     (data.assets || []).forEach((a) => {
       if (a.type === "boat") {
         if (!("boatType" in a)) { a.boatType = null; changed = true; }
@@ -1431,6 +1481,290 @@
     el.classList.add("show");
     clearTimeout(toast._t);
     toast._t = setTimeout(() => el.classList.remove("show"), 2400);
+  }
+
+  // ── Browser reminders (Notifications API) ────────────────
+  function reminderCandidates() {
+    const r = ensureReminders();
+    const windowDays = r.dueSoonDays || 7;
+    return visibleTasks(state.tasks).filter((t) => {
+      const d = daysUntilDue(t);
+      if (d === null) return false; // as-needed / no due date
+      return d < 0 || d <= windowDays;
+    });
+  }
+
+  function showDocksideNotification(body) {
+    if (!notificationsSupported()) return null;
+    if (Notification.permission !== "granted") return null;
+    try {
+      const n = new Notification("Dockside", {
+        body: body,
+        tag: "dockside-reminders",
+        renotify: false,
+      });
+      n.onclick = function () {
+        try {
+          window.focus();
+        } catch (_) {}
+        navigate("track", { clearHistory: true });
+        try {
+          n.close();
+        } catch (_) {}
+      };
+      return n;
+    } catch (err) {
+      console.warn("Notification failed", err);
+      return null;
+    }
+  }
+
+  function runReminderCheck(opts) {
+    const options = opts || {};
+    const force = !!options.force;
+    const welcome = !!options.welcome;
+    if (!state || !state.setupComplete) return;
+    const r = ensureReminders();
+    if (!r.enabled) return;
+    if (!notificationsSupported()) return;
+    syncReminderPermission();
+    if (r.permission !== "granted") return;
+
+    const now = Date.now();
+    if (!force && r.lastRunAt) {
+      const last = Date.parse(r.lastRunAt);
+      if (!Number.isNaN(last) && now - last < REMINDER_SCAN_MS) return;
+    }
+
+    r.lastRunAt = new Date().toISOString();
+    const today = todayISO();
+    const candidates = reminderCandidates();
+    const fresh = candidates.filter((t) => r.notified[t.id] !== today);
+
+    if (!fresh.length) {
+      if (welcome) {
+        showDocksideNotification(
+          "Reminders are on — we'll nudge you when jobs are due"
+        );
+      }
+      save(state);
+      return;
+    }
+
+    const overdue = fresh.filter((t) => {
+      const d = daysUntilDue(t);
+      return d !== null && d < 0;
+    });
+    const lead = overdue[0] || fresh[0];
+    let body;
+    if (fresh.length === 1) {
+      const d = daysUntilDue(lead);
+      if (d < 0) body = lead.title + " is overdue";
+      else if (d === 0) body = lead.title + " is due today";
+      else if (d === 1) body = lead.title + " is due tomorrow";
+      else body = lead.title + " is due in " + d + " days";
+    } else if (overdue.length) {
+      body =
+        fresh.length +
+        " jobs need attention — " +
+        lead.title +
+        " is overdue";
+    } else {
+      body = fresh.length + " jobs due soon — " + lead.title;
+    }
+
+    showDocksideNotification(body);
+    fresh.forEach((t) => {
+      r.notified[t.id] = today;
+    });
+    save(state);
+  }
+
+  async function setRemindersEnabled(wantOn) {
+    const r = ensureReminders();
+    if (!wantOn) {
+      r.enabled = false;
+      save(state);
+      toast("Reminders off");
+      render();
+      return;
+    }
+    if (!notificationsSupported()) {
+      r.enabled = false;
+      r.permission = "unsupported";
+      save(state);
+      toast("Notifications not supported here");
+      render();
+      return;
+    }
+    let perm = Notification.permission;
+    if (perm === "default") {
+      try {
+        perm = await Notification.requestPermission();
+      } catch (err) {
+        console.warn(err);
+        perm = Notification.permission;
+      }
+    }
+    r.permission = perm;
+    if (perm === "granted") {
+      r.enabled = true;
+      save(state);
+      toast("Reminders on");
+      render();
+      runReminderCheck({ force: true, welcome: true });
+    } else {
+      r.enabled = false;
+      save(state);
+      toast(
+        perm === "denied"
+          ? "Notifications blocked — allow them in browser settings"
+          : "Permission not granted"
+      );
+      render();
+    }
+  }
+
+  function setReminderDueSoonDays(days) {
+    const r = ensureReminders();
+    const n = Number(days);
+    if (![3, 7, 14].includes(n)) return;
+    r.dueSoonDays = n;
+    save(state);
+    toast("Due-soon window: " + n + " days");
+    render();
+  }
+
+  function sendTestReminder() {
+    const r = ensureReminders();
+    syncReminderPermission();
+    if (!notificationsSupported() || r.permission !== "granted") {
+      toast("Allow notifications first");
+      return;
+    }
+    const cands = reminderCandidates();
+    if (cands.length) {
+      const lead = cands[0];
+      const d = daysUntilDue(lead);
+      const hint =
+        d < 0
+          ? lead.title + " is overdue"
+          : lead.title + " needs attention soon";
+      showDocksideNotification(
+        "Test: " + hint + " (sample — real nudges once per day)"
+      );
+    } else {
+      showDocksideNotification(
+        "Test reminder — you'll get a nudge like this when a job is overdue or due soon"
+      );
+    }
+    toast("Test reminder sent");
+  }
+
+  function startReminderWatchers() {
+    if (reminderIntervalId) {
+      clearInterval(reminderIntervalId);
+      reminderIntervalId = null;
+    }
+    // Initial scan after first paint
+    setTimeout(function () {
+      runReminderCheck({ force: false });
+    }, 800);
+
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") {
+        runReminderCheck({ force: false });
+      }
+    });
+
+    reminderIntervalId = setInterval(function () {
+      if (document.visibilityState === "visible") {
+        runReminderCheck({ force: false });
+      }
+    }, REMINDER_INTERVAL_MS);
+
+    window.addEventListener("pagehide", function () {
+      if (reminderIntervalId) {
+        clearInterval(reminderIntervalId);
+        reminderIntervalId = null;
+      }
+    });
+  }
+
+  function remindersStatusLabel() {
+    const r = ensureReminders();
+    if (!notificationsSupported()) return "Unsupported";
+    syncReminderPermission();
+    if (!r.enabled) {
+      if (r.permission === "denied") return "Off · notifications blocked";
+      return "Off";
+    }
+    if (r.permission === "granted") return "On · permission granted";
+    if (r.permission === "denied") return "On · blocked";
+    return "On · permission pending";
+  }
+
+  function remindersChipHTML() {
+    const r = ensureReminders();
+    if (!notificationsSupported()) return "";
+    syncReminderPermission();
+    if (r.enabled && r.permission === "granted") {
+      return `<span class="reminders-chip on" title="Browser reminders enabled">Reminders on</span>`;
+    }
+    if (r.permission === "denied") {
+      return `<span class="reminders-chip warn" title="Allow notifications in browser settings">Notifications blocked</span>`;
+    }
+    return "";
+  }
+
+  function remindersSettingsHTML() {
+    const r = ensureReminders();
+    const supported = notificationsSupported();
+    syncReminderPermission();
+    const status = remindersStatusLabel();
+    const days = r.dueSoonDays || 7;
+
+    if (!supported) {
+      return `
+        <div class="settings-block reminder-card">
+          <h3>Reminders</h3>
+          <p class="hint">Get a browser nudge when a job is overdue or due within a week.</p>
+          <p class="reminder-unsupported">Reminders need a browser that supports notifications (Chrome / Edge / installed PWA work best).</p>
+        </div>`;
+    }
+
+    const deniedHint =
+      r.permission === "denied"
+        ? `<p class="reminder-denied">Notifications are blocked. Open your browser site settings for this page and allow notifications, then turn Reminders on again.</p>`
+        : "";
+
+    const testBtn =
+      r.permission === "granted"
+        ? `<button type="button" class="btn btn-ghost btn-block" data-action="test-reminder" style="margin-top:8px">Send test reminder</button>`
+        : "";
+
+    return `
+      <div class="settings-block reminder-card">
+        <h3>Reminders</h3>
+        <p class="hint">Get a browser nudge when a job is overdue or due within a week.</p>
+        <div class="reminder-status-row">
+          <span class="reminder-status ${r.enabled && r.permission === "granted" ? "on" : ""}">${escapeHtml(status)}</span>
+          <button type="button" class="btn ${r.enabled ? "btn-secondary" : "btn-primary"} btn-sm" data-action="toggle-reminders" data-on="${r.enabled ? "0" : "1"}">${r.enabled ? "Turn off" : "Enable"}</button>
+        </div>
+        ${deniedHint}
+        <div class="reminder-window">
+          <div class="reminder-window-label">Due-soon window</div>
+          <div class="reminder-day-chips">
+            ${[3, 7, 14]
+              .map(
+                (d) =>
+                  `<button type="button" class="chip ${days === d ? "active" : ""}" data-action="reminder-days" data-id="${d}">${d} days</button>`
+              )
+              .join("")}
+          </div>
+        </div>
+        ${testBtn}
+      </div>`;
   }
 
   function navigate(view, opts = {}) {
@@ -2191,10 +2525,11 @@
         <p class="home-clear-note">That's the only job on the books — you're in good shape.</p>`;
     }
 
+    const remChip = remindersChipHTML();
     return `
       <section class="home-status ${statusTone}">
         <div class="home-status-line">${statusLine}</div>
-        <div class="home-status-counts">${escapeHtml(countLine)}</div>
+        <div class="home-status-counts">${escapeHtml(countLine)}${remChip ? ` · ${remChip}` : ""}</div>
         <div class="home-identity">
           <span class="home-identity-text">${escapeHtml(summary)}</span>
           <button type="button" class="home-identity-edit" data-action="goto-setup">Edit</button>
@@ -2469,10 +2804,11 @@
         <div class="mm-icon">St</div>
         <div class="mm-body">
           <div class="mm-title">Settings</div>
-          <div class="mm-sub">Rename assets, backup, reset</div>
+          <div class="mm-sub">Reminders, rename assets, backup, reset</div>
         </div>
         <span class="chevron">›</span>
       </div>
+      ${remindersSettingsHTML()}
       <p class="build-footer">
         Dockside · ${BUILD} · Track. Fix. Buy.
       </p>
@@ -2709,6 +3045,7 @@
           <button type="submit" class="btn btn-primary btn-block" style="margin-top:8px">Save assets</button>
         </div>
       </form>
+      ${remindersSettingsHTML()}
       <div class="settings-block">
         <h3>💾 Backup</h3>
         <p class="hint">Export JSON to keep a copy. Import to restore on this or another device (same browser storage).</p>
@@ -2920,6 +3257,15 @@
       case "confirm-reset":
         resetData();
         break;
+      case "toggle-reminders":
+        setRemindersEnabled(t.dataset.on === "1");
+        break;
+      case "reminder-days":
+        setReminderDueSoonDays(id);
+        break;
+      case "test-reminder":
+        sendTestReminder();
+        break;
       default:
         break;
     }
@@ -2955,6 +3301,7 @@
     else if (hash === "setup") currentView = "setup";
 
     render();
+    startReminderWatchers();
   }
 
   if (document.readyState === "loading") {
