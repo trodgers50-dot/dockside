@@ -9,7 +9,12 @@
   const STORAGE_KEY = "boatTrailerMaint.v1";
   const DUE_SOON_DAYS = 14;
 
-  const BUILD = "v1-guides-torque";
+  const BUILD = "v1-harbor";
+
+
+  const ICON_ANCHOR = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2c-1.1 0-2 .7-2 1.8V5c-3 .5-5 2.2-5 5.2 0 1.2.4 2.3 1.2 3.1L5 21h2.5l1.1-4.2c1.1.4 2.2.6 3.4.6s2.3-.2 3.4-.6L16.5 21H19l-1.2-5.7c.8-.8 1.2-1.9 1.2-3.1 0-3-2-4.7-5-5.2V3.8C14 2.7 13.1 2 12 2zm0 6.2c2.2 0 3.5 1 3.5 2.5S14.2 13.2 12 13.2 8.5 12.2 8.5 10.7 9.8 8.2 12 8.2z"/></svg>`;
+  const ICON_BOAT = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M3 17h18M5 17l2-7h10l2 7M8 10V8l4-3 4 3v2"/></svg>`;
+
 
   const BOAT_TYPES = [
     { value: "center-console", label: "Center console" },
@@ -248,10 +253,13 @@
     if (incomplete) {
       return `
         <div class="your-gear-card incomplete">
-          <div class="ygc-icon">🚤</div>
-          <div class="ygc-body">
-            <h3>Add your boat &amp; trailer</h3>
-            <p>Boat type, engine, and trailer — so guides and parts match what you run</p>
+          <div class="ygc-kicker">Harbor setup</div>
+          <div class="ygc-top">
+            <div class="ygc-icon">${ICON_BOAT}</div>
+            <div class="ygc-body">
+              <h3>Add your boat &amp; trailer</h3>
+              <p>Boat type, engine, and trailer — so guides and parts match what you run</p>
+            </div>
           </div>
           <button type="button" class="btn btn-primary btn-block" data-action="goto-setup">Add my gear</button>
         </div>`;
@@ -259,8 +267,9 @@
     const summary = gearSummaryLabel();
     return `
       <div class="your-gear-card complete">
+        <div class="ygc-kicker">Your vessel</div>
         <div class="ygc-top">
-          <div class="ygc-icon">⚓</div>
+          <div class="ygc-icon">${ICON_ANCHOR}</div>
           <div class="ygc-body">
             <h3>Your boat &amp; trailer</h3>
             <p class="ygc-summary">${escapeHtml(summary)}</p>
@@ -1569,10 +1578,10 @@
   function proBannerHTML() {
     return `
       <div class="pro-banner" role="note">
-        <div class="pro-icon">✨</div>
+        <div class="pro-icon">Pro</div>
         <div class="pro-body">
           <strong>Dockside Pro — coming soon</strong>
-          Pro unlocks full guide library + smarter parts picks — coming soon
+          Full guide library + smarter parts picks — on the horizon
         </div>
       </div>
     `;
@@ -1636,7 +1645,7 @@
     renderGroup("Due soon", "due-soon", groups.dueSoon);
     renderGroup("Upcoming", "upcoming", groups.upcoming);
     if (!parts.length) {
-      return `<div class="empty-state"><div class="empty-icon">⚓</div><h3>All clear</h3><p>${emptyMsg}</p></div>`;
+      return `<div class="empty-state"><div class="empty-icon">✓</div><h3>All clear</h3><p>${emptyMsg}</p></div>`;
     }
     return parts.join("");
   }
@@ -1653,7 +1662,7 @@
           <div class="part-name">${escapeHtml(p.name)}</div>
           <div class="part-why">${escapeHtml(p.why)}</div>
         </div>
-        <a class="btn btn-buy" href="${escapeAttr(buyUrlForPart(p, asset))}" target="_blank" rel="noopener noreferrer">Buy</a>
+        <a class="btn btn-buy" href="${escapeAttr(buyUrlForPart(p, asset))}" target="_blank" rel="noopener noreferrer">Shop</a>
       </div>`
       )
       .join("");
@@ -1689,7 +1698,7 @@
     return `
       <div class="setup-screen">
         <div class="setup-hero">
-          <div class="setup-emoji">🚤</div>
+          <div class="setup-mark">${ICON_ANCHOR}</div>
           <h2>${editing ? "Your gear" : "Welcome to Dockside"}</h2>
           <p>Tell Dockside what you run — we’ll tailor guides and parts.</p>
         </div>
@@ -1822,26 +1831,28 @@
 
     const list = tasks.length
       ? tasks
-          .map((t) => {
+          .map((t, i) => {
             const asset = state.assets.find((a) => a.id === t.assetId);
             const n = t.steps.length;
             const pc = (t.parts || []).length;
-            const badge = asset?.type === "trailer" ? "For your trailer" : "For your boat";
+            const tq = (t.torqueSpecs || []).length;
+            const badge = asset?.type === "trailer" ? "Trailer" : "Boat";
+            const num = String(i + 1).padStart(2, "0");
             return `
             <div class="guide-row" data-action="open-guide" data-id="${t.id}">
-              <div class="guide-icon">${asset?.type === "trailer" ? "🚛" : "🚤"}</div>
+              <div class="guide-num">${num}</div>
               <div class="guide-info">
                 <div class="guide-title">${escapeHtml(t.title)}</div>
                 <div class="guide-meta">
                   <span class="badge for-you">${badge}</span>
-                  ${n} steps${pc ? ` · ${pc} parts` : ""}
+                  ${n} steps${tq ? ` · ${tq} torque` : ""}${pc ? ` · ${pc} parts` : ""}
                 </div>
               </div>
               <span class="chevron">›</span>
             </div>`;
           })
           .join("")
-      : `<div class="empty-state"><div class="empty-icon">📖</div><h3>No guides yet</h3><p>Seeded tasks include how-tos. Reset data in Settings if needed.</p></div>`;
+      : `<div class="empty-state"><div class="empty-icon">01</div><h3>No guides yet</h3><p>Seeded tasks include how-tos. Reset data in Settings if needed.</p></div>`;
 
     return `
       ${incomplete ? addGearCTAHTML(true) : ""}
@@ -1900,7 +1911,7 @@
                 <div class="part-why">${escapeHtml(row.part.why)}</div>
                 <div class="part-task">${escapeHtml(row.task.title)}</div>
               </div>
-              <a class="btn btn-buy" href="${escapeAttr(buyUrlForPart(row.part, a))}" target="_blank" rel="noopener noreferrer">Buy</a>
+              <a class="btn btn-buy" href="${escapeAttr(buyUrlForPart(row.part, a))}" target="_blank" rel="noopener noreferrer">Shop</a>
             </div>`
             )
             .join("")}`;
@@ -1918,7 +1929,7 @@
       ${
         total
           ? sections + affiliateNoteHTML()
-          : `<div class="empty-state"><div class="empty-icon">🔧</div><h3>No parts yet</h3><p>Seeded jobs include buy links. Reset in Settings if your data is empty.</p></div>`
+          : `<div class="empty-state"><div class="empty-icon">◎</div><h3>No parts yet</h3><p>Seeded jobs include buy links. Reset in Settings if your data is empty.</p></div>`
       }
     `;
   }
@@ -1931,7 +1942,7 @@
       ${yourGearCardHTML()}
       <div class="section-label">Gear hub</div>
       <div class="more-menu-item" data-action="goto-setup">
-        <div class="mm-icon">✏️</div>
+        <div class="mm-icon">Ed</div>
         <div class="mm-body">
           <div class="mm-title">${incomplete ? "Add boat, engine & trailer" : "Edit boat, engine & trailer"}</div>
           <div class="mm-sub">${escapeHtml(summary)}</div>
@@ -1939,7 +1950,7 @@
         <span class="chevron">›</span>
       </div>
       <div class="more-menu-item" data-action="goto-assets">
-        <div class="mm-icon">🚤</div>
+        <div class="mm-icon">As</div>
         <div class="mm-body">
           <div class="mm-title">Assets</div>
           <div class="mm-sub">${state.assets.length} assets · ${overdue ? overdue + " overdue tasks" : "on track"}</div>
@@ -1947,14 +1958,14 @@
         <span class="chevron">›</span>
       </div>
       <div class="more-menu-item" data-action="goto-settings">
-        <div class="mm-icon">⚙️</div>
+        <div class="mm-icon">St</div>
         <div class="mm-body">
           <div class="mm-title">Settings</div>
           <div class="mm-sub">Rename assets, backup, reset</div>
         </div>
         <span class="chevron">›</span>
       </div>
-      <p style="text-align:center;font-size:0.75rem;color:var(--text-dim);margin-top:20px">
+      <p class="build-footer">
         Dockside · ${BUILD} · Track. Fix. Buy.
       </p>
     `;
@@ -2065,19 +2076,19 @@
     html += `<p class="guide-verify-banner">Torque &amp; capacities below are <strong>typical</strong> — verify in your OEM service manual before tightening.</p>`;
 
     if (warnings.length) {
-      html += `<div class="guide-warnings"><div class="guide-sec-title">⚠️ Warnings</div><ul>${warnings
+      html += `<div class="guide-warnings"><div class="guide-sec-title">Warnings</div><ul>${warnings
         .map((w) => `<li>${escapeHtml(w)}</li>`)
         .join("")}</ul></div>`;
     }
 
     if (tools.length) {
-      html += `<div class="guide-tools"><div class="guide-sec-title">🧰 Tools</div><div class="tool-chips">${tools
+      html += `<div class="guide-tools"><div class="guide-sec-title">Tools</div><div class="tool-chips">${tools
         .map((t) => `<span class="tool-chip">${escapeHtml(t)}</span>`)
         .join("")}</div></div>`;
     }
 
     if (torque.length) {
-      html += `<div class="guide-torque"><div class="guide-sec-title">🔩 Torque specs <span class="guide-sec-sub">Typical — verify OEM</span></div>`;
+      html += `<div class="guide-torque"><div class="guide-sec-title">Torque specs <span class="guide-sec-sub">Typical — verify OEM</span></div>`;
       html += `<div class="torque-table" role="table">`;
       html += `<div class="torque-head" role="row"><span>Part</span><span>Spec</span><span>Note</span></div>`;
       torque.forEach((row) => {
@@ -2091,12 +2102,12 @@
     }
 
     if (steps.length) {
-      html += `<div class="guide-steps-wrap"><div class="guide-sec-title">📋 Step-by-step</div>`;
+      html += `<div class="guide-steps-wrap"><div class="guide-sec-title">Step-by-step</div>`;
       html += `<ol class="howto-steps">${steps.map((s) => `<li>${escapeHtml(s)}</li>`).join("")}</ol></div>`;
     }
 
     if (fluids.length) {
-      html += `<div class="guide-fluids"><div class="guide-sec-title">🛢️ Fluids <span class="guide-sec-sub">Typical — verify capacity</span></div><ul>${fluids
+      html += `<div class="guide-fluids"><div class="guide-sec-title">Fluids <span class="guide-sec-sub">Typical — verify capacity</span></div><ul>${fluids
         .map((f) => `<li>${escapeHtml(f)}</li>`)
         .join("")}</ul></div>`;
     }
@@ -2140,12 +2151,12 @@
       </div>
 
       <div class="howto-block ${focusGuide ? "highlight" : ""}" id="howto-section">
-        <h3>📖 How-to guide</h3>
+        <h3><span class="sec-mark">DIY</span> How-to guide</h3>
         ${renderGuideBody(task, asset)}
       </div>
 
       <div class="parts-block shop-block">
-        <h3>🛒 Shop parts for this job</h3>
+        <h3><span class="sec-mark">Buy</span> Shop parts for this job</h3>
         ${partsListHTML(parts, asset)}
       </div>
     `;
