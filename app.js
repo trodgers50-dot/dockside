@@ -9,7 +9,10 @@
   const STORAGE_KEY = "boatTrailerMaint.v1";
   const DUE_SOON_DAYS = 14;
 
-  const BUILD = "v1-parts-match";
+  const BUILD = "v1-shop-links";
+
+  // Amazon Associates tag — set when approved (e.g. "dockside-20"); leave empty until then.
+  const AMAZON_ASSOCIATE_TAG = "";
 
 
   const ICON_ANCHOR = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2c-1.1 0-2 .7-2 1.8V5c-3 .5-5 2.2-5 5.2 0 1.2.4 2.3 1.2 3.1L5 21h2.5l1.1-4.2c1.1.4 2.2.6 3.4.6s2.3-.2 3.4-.6L16.5 21H19l-1.2-5.7c.8-.8 1.2-1.9 1.2-3.1 0-3-2-4.7-5-5.2V3.8C14 2.7 13.1 2 12 2zm0 6.2c2.2 0 3.5 1 3.5 2.5S14.2 13.2 12 13.2 8.5 12.2 8.5 10.7 9.8 8.2 12 8.2z"/></svg>`;
@@ -370,7 +373,11 @@
   };
 
   function amazonSearch(q) {
-    return "https://www.amazon.com/s?k=" + encodeURIComponent(q);
+    let url = "https://www.amazon.com/s?k=" + encodeURIComponent(String(q || "").trim());
+    if (AMAZON_ASSOCIATE_TAG) {
+      url += "&tag=" + encodeURIComponent(AMAZON_ASSOCIATE_TAG);
+    }
+    return url;
   }
 
   function partSearchQuery(part) {
@@ -385,6 +392,60 @@
     return (part && part.name) || "";
   }
 
+  /** Short shoppable suffixes when engine make/model is known (avoid stacking long generic phrases). */
+  const ENGINE_PART_SEARCH_SUFFIX = {
+    "oil-filter": "oil filter",
+    "engine-oil": "FC-W marine oil",
+    "oil-drain-pan": "oil drain pan",
+    "crush-washers": "drain plug crush washer",
+    "gear-oil": "gear lube",
+    "gear-oil-pump": "gear oil pump",
+    "drain-gaskets": "drain plug gasket",
+    "impeller": "impeller kit",
+    "pump-gasket": "water pump gasket kit",
+    "impeller-grease": "impeller lubricant",
+    "fuel-filter": "fuel filter",
+    "fuel-filter-wrench": "fuel filter wrench",
+    "fogging-oil": "fogging oil",
+    "fuel-stabilizer": "fuel stabilizer",
+    "outdrive-anode": "anode kit",
+  };
+
+  const MARINE_ENGINE_BRANDS = ["Yamaha", "Mercury", "Honda", "Suzuki", "Volvo", "Tohatsu"];
+
+  function sniffEngineBrand(boat) {
+    if (!boat) return "";
+    const hay = `${boat.engineMakeModel || ""} ${boat.makeModel || ""}`;
+    for (let i = 0; i < MARINE_ENGINE_BRANDS.length; i++) {
+      const brand = MARINE_ENGINE_BRANDS[i];
+      if (new RegExp("\\b" + brand + "\\b", "i").test(hay)) return brand;
+    }
+    return "";
+  }
+
+  function dedupeSearchWords(q) {
+    const seen = new Set();
+    const out = [];
+    String(q || "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .forEach((w) => {
+        const key = w.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push(w);
+      });
+    return out.join(" ");
+  }
+
+  function capSearchQuery(q, maxLen) {
+    let s = dedupeSearchWords(String(q || "").trim());
+    if (s.length <= maxLen) return s;
+    const cut = s.slice(0, maxLen);
+    const nice = cut.replace(/\s+\S*$/, "").trim();
+    return nice || cut.trim();
+  }
+
   function typeAwarePartSearch(part, boat) {
     let base = partSearchQuery(part);
     const engineType = boat?.engineType || "";
@@ -392,13 +453,14 @@
     if (!engineType || engineType === "none" || engineType === "electric") return base;
 
     if (engineType === "outboard") {
-      if (baseId === "oil-filter" && !/outboard/i.test(base)) base = "outboard oil filter";
-      else if (baseId === "impeller" && !/outboard/i.test(base)) base = "outboard impeller kit";
+      if (baseId === "oil-filter" && !/outboard/i.test(base)) base = "outboard FC-W oil filter";
+      else if (baseId === "impeller" && !/outboard/i.test(base)) base = "outboard water pump impeller kit";
       else if (baseId === "pump-gasket" && !/outboard/i.test(base)) base = "outboard water pump gasket kit";
-      else if (baseId === "gear-oil" && !/outboard|lower unit/i.test(base)) base = "outboard lower unit gear oil";
+      else if (baseId === "gear-oil" && !/outboard|lower unit|gear lube/i.test(base)) base = "outboard lower unit gear lube";
     } else if (engineType === "sterndrive") {
-      if (baseId === "impeller" && !/sterndrive|outdrive/i.test(base)) base = "sterndrive impeller kit";
+      if (baseId === "impeller" && !/sterndrive|outdrive/i.test(base)) base = "sterndrive water pump impeller kit";
       else if (baseId === "oil-filter" && !/sterndrive|marine/i.test(base)) base = "marine sterndrive oil filter";
+      else if (baseId === "gear-oil" && !/sterndrive|outdrive|gear lube/i.test(base)) base = "sterndrive gear lube";
     } else if (engineType === "inboard") {
       if (baseId === "oil-filter") base = "marine inboard oil filter";
       else if (baseId === "impeller") base = "inboard raw water pump impeller";
@@ -414,32 +476,50 @@
   function gearAwarePartSearch(part, asset) {
     const boat = getBoat();
     const trailer = getTrailer();
-    let base = typeAwarePartSearch(part, boat);
+    const baseId = partBaseId(part);
+    const isTrailerAsset = asset && asset.type === "trailer";
+    const isEnginePart = !isTrailerAsset && ENGINE_PART_BASE_IDS.has(baseId);
 
-    let prefix = "";
-    if (asset && asset.type === "trailer") {
-      prefix = trailerSearchPrefix(trailer);
-    } else {
-      prefix = engineSearchPrefix(boat);
+    // Make/model known → short brand+model + part suffix (shoppable, not stacked generics)
+    if (isEnginePart && boat && boat.engineMakeModel) {
+      const suffix = ENGINE_PART_SEARCH_SUFFIX[baseId] || partSearchQuery(part);
+      return capSearchQuery(String(boat.engineMakeModel).trim() + " " + suffix, 90);
     }
 
-    if (!prefix) return base;
+    let base = typeAwarePartSearch(part, boat);
+
+    // Lightweight brand sniff for engine parts when brand appears in gear but not yet in query
+    if (isEnginePart) {
+      const brand = sniffEngineBrand(boat);
+      if (brand && !new RegExp("\\b" + brand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(base)) {
+        base = brand + " " + base;
+      }
+    }
+
+    let prefix = "";
+    if (isTrailerAsset) {
+      prefix = trailerSearchPrefix(trailer);
+    } else {
+      // Prefer engine type/size prefix when make/model missing (engineSearchPrefix may fall back to boat make)
+      if (boat && boat.engineMakeModel) {
+        prefix = String(boat.engineMakeModel).trim();
+      } else if (boat && boat.engineType && boat.engineType !== "none") {
+        const size = cleanEngineSizeLabel(boat.engineSizeLabel);
+        const type = shortEngineTypeLabel(boat.engineType);
+        if (size && type) prefix = `${size} ${type}`;
+        else if (type) prefix = type;
+      }
+    }
+
+    if (!prefix) return capSearchQuery(base, 90);
 
     const prefixLower = prefix.toLowerCase();
     const baseLower = base.toLowerCase();
-    // Avoid double-prefixing when make/model already appears in the part search
-    if (baseLower.includes(prefixLower)) return base;
-    // Also skip if the significant token (e.g. "Yamaha F150") words are already present
+    if (baseLower.includes(prefixLower)) return capSearchQuery(base, 90);
     const tokens = prefixLower.split(/\s+/).filter((t) => t.length > 2);
-    if (tokens.length && tokens.every((t) => baseLower.includes(t))) return base;
+    if (tokens.length && tokens.every((t) => baseLower.includes(t))) return capSearchQuery(base, 90);
 
-    const q = (prefix + " " + base).trim();
-    // Keep shoppable — trim very long queries
-    if (q.length > 90) {
-      const shortBase = base.length > 40 ? base.slice(0, 40).trim() : base;
-      return (prefix + " " + shortBase).trim().slice(0, 90);
-    }
-    return q;
+    return capSearchQuery((prefix + " " + base).trim(), 90);
   }
 
   function buyUrlForPart(part, asset) {
@@ -447,7 +527,10 @@
   }
 
   function affiliateNoteHTML() {
-    return `<p class="affiliate-note">Buy links help support Dockside</p>`;
+    if (AMAZON_ASSOCIATE_TAG) {
+      return `<p class="affiliate-note">As an Amazon Associate, Dockside may earn from qualifying purchases</p>`;
+    }
+    return `<p class="affiliate-note">Buy links help support Dockside · Amazon search</p>`;
   }
 
   function addGearCTAHTML(compact) {
@@ -579,10 +662,10 @@
         "Shop stop: if the plug won’t seal, threads are damaged, or pressure/warning lights stay on after refill — do not keep running; get service.",
       ],
       parts: [
-        part("oil-filter", "Marine oil filter", "Matches your engine’s filter size", "marine boat oil filter"),
-        part("engine-oil", "FC-W marine engine oil", "Correct viscosity for outboards/inboards", "FC-W marine engine oil"),
+        part("oil-filter", "Marine oil filter", "Matches your engine’s filter size", "FC-W oil filter"),
+        part("engine-oil", "FC-W marine engine oil", "Correct viscosity for outboards/inboards", "FC-W 10W-30 marine oil"),
         part("oil-drain-pan", "Oil drain pan", "Catch used oil without spills", "oil drain pan"),
-        part("crush-washers", "Oil drain crush washers", "Fresh seal on the drain plug", "oil drain plug crush washer"),
+        part("crush-washers", "Oil drain crush washers", "Fresh seal on the drain plug", "outboard oil drain plug crush washer"),
       ],
     },
     "Lower unit / gearcase oil": {
@@ -619,9 +702,9 @@
         "Shop stop: recurring milky oil after a refill means a seal or water-intrusion problem — get pressure-tested before the next trip.",
       ],
       parts: [
-        part("gear-oil", "Lower unit gear oil", "Marine-rated gear lube for the case", "boat lower unit gear oil"),
-        part("gear-oil-pump", "Gear oil pump bottle", "Fill from the bottom without air pockets", "gear oil pump bottle"),
-        part("drain-gaskets", "Lower unit drain plug gaskets", "Fresh seals prevent leaks", "outboard drain plug gasket"),
+        part("gear-oil", "Lower unit gear oil", "Marine-rated gear lube for the case", "marine lower unit gear lube GL-5"),
+        part("gear-oil-pump", "Gear oil pump bottle", "Fill from the bottom without air pockets", "marine gear oil pump bottle"),
+        part("drain-gaskets", "Lower unit drain plug gaskets", "Fresh seals prevent leaks", "outboard lower unit drain plug gasket"),
       ],
     },
     "Impeller / water pump": {
@@ -661,9 +744,9 @@
         "Shop stop: no tell-tale after install, grinding on shift, or metal in the old pump → professional diagnosis before the next outing.",
       ],
       parts: [
-        part("impeller", "Water pump impeller kit", "Rubber vanes wear out — replace on schedule", "boat impeller water pump kit"),
-        part("pump-gasket", "Water pump gasket / housing kit", "Seals the pump against leaks", "outboard water pump gasket kit"),
-        part("impeller-grease", "Impeller / assembly lube", "Eases install without damaging vanes", "impeller installation lubricant"),
+        part("impeller", "Water pump impeller kit", "Rubber vanes wear out — replace on schedule", "outboard water pump impeller kit"),
+        part("pump-gasket", "Water pump gasket / housing kit", "Seals the pump against leaks", "outboard water pump housing gasket kit"),
+        part("impeller-grease", "Impeller / assembly lube", "Eases install without damaging vanes", "marine impeller installation lubricant"),
       ],
     },
     "Fuel filter / water separator": {
@@ -700,9 +783,9 @@
         "Shop stop: you can’t get a firm prime, engine dies from fuel starvation after replace, or the filter head is cracked — get a tech before launching.",
       ],
       parts: [
-        part("fuel-filter", "Fuel filter / water separator", "Removes water and debris before the engine", "boat fuel water separator filter"),
-        part("fuel-filter-wrench", "Filter wrench", "Removes stubborn spin-on housings", "fuel filter wrench"),
-        part("absorbent-pads", "Fuel absorbent pads", "Catch drips safely during service", "fuel absorbent pads"),
+        part("fuel-filter", "Fuel filter / water separator", "Removes water and debris before the engine", "marine spin-on fuel water separator"),
+        part("fuel-filter-wrench", "Filter wrench", "Removes stubborn spin-on housings", "fuel water separator filter wrench"),
+        part("absorbent-pads", "Fuel absorbent pads", "Catch drips safely during service", "oil fuel absorbent pads"),
       ],
     },
     "Battery & connections": {
@@ -737,10 +820,10 @@
         "Shop stop: cables melt under load, voltage collapses under cranking, or you’re unsure of dual-battery wiring — get a marine electrician.",
       ],
       parts: [
-        part("terminal-cleaner", "Battery terminal cleaner", "Removes corrosion for solid contact", "battery terminal cleaner brush"),
-        part("dielectric-grease", "Dielectric grease", "Protects terminals from corrosion", "dielectric grease marine"),
-        part("battery-tender", "Marine battery tender", "Keeps batteries topped between trips", "marine battery tender charger"),
-        part("terminal-protectors", "Terminal protector felt washers", "Extra corrosion barrier", "battery terminal protector washers"),
+        part("terminal-cleaner", "Battery terminal cleaner", "Removes corrosion for solid contact", "marine battery terminal cleaner brush"),
+        part("dielectric-grease", "Dielectric grease", "Protects terminals from corrosion", "marine dielectric grease"),
+        part("battery-tender", "Marine battery tender", "Keeps batteries topped between trips", "Battery Tender Plus marine"),
+        part("terminal-protectors", "Terminal protector felt washers", "Extra corrosion barrier", "battery terminal felt protector washers"),
       ],
     },
     "Zincs / anodes": {
@@ -770,9 +853,9 @@
         "Shop stop: rapid anode loss (weeks) or active pitting with intact anodes → corrosion specialist / yard.",
       ],
       parts: [
-        part("shaft-zinc", "Shaft / prop shaft anode", "Sacrificial protection for underwater metal", "boat shaft zinc anode"),
-        part("outdrive-anode", "Outdrive / trim tab anode kit", "Protects sterndrive and trim hardware", "outdrive anode kit"),
-        part("anode-bolts", "Stainless anode bolts", "Secure mount without galvanic issues", "stainless anode mounting bolts"),
+        part("shaft-zinc", "Shaft / prop shaft anode", "Sacrificial protection for underwater metal", "boat prop shaft zinc anode"),
+        part("outdrive-anode", "Outdrive / trim tab anode kit", "Protects sterndrive and trim hardware", "sterndrive outdrive anode kit"),
+        part("anode-bolts", "Stainless anode bolts", "Secure mount without galvanic issues", "stainless steel anode mounting bolts"),
       ],
     },
     "Hull wash & wax": {
@@ -802,8 +885,8 @@
       ],
       parts: [
         part("boat-soap", "Marine boat soap", "Safe cleaner for gelcoat and vinyl", "marine boat soap wash"),
-        part("marine-wax", "Marine wax / polish", "UV protection and shine above waterline", "marine boat wax"),
-        part("microfiber", "Microfiber wash & buff towels", "Scratch-safer drying and polishing", "microfiber boat towels"),
+        part("marine-wax", "Marine wax / polish", "UV protection and shine above waterline", "marine boat wax polish"),
+        part("microfiber", "Microfiber wash & buff towels", "Scratch-safer drying and polishing", "microfiber boat wash towels"),
       ],
     },
     "Winterize / dewinterize": {
@@ -841,9 +924,9 @@
         "Shop stop: unknown closed-cooling condition, cracked bellows, or no cooling stream after dewinterize — yard before the first trip.",
       ],
       parts: [
-        part("antifreeze", "Marine antifreeze (-50°)", "Non-toxic propylene glycol for winterizing", "marine antifreeze propylene glycol"),
-        part("fogging-oil", "Fogging oil", "Protects cylinders during storage", "marine fogging oil"),
-        part("fuel-stabilizer", "Fuel stabilizer", "Prevents varnish in stored fuel", "marine fuel stabilizer"),
+        part("antifreeze", "Marine antifreeze (-50°)", "Non-toxic propylene glycol for winterizing", "marine propylene glycol antifreeze -50"),
+        part("fogging-oil", "Fogging oil", "Protects cylinders during storage", "marine fogging oil storage"),
+        part("fuel-stabilizer", "Fuel stabilizer", "Prevents varnish in stored fuel", "marine fuel stabilizer ethanol"),
       ],
     },
     "Drain plugs check": {
@@ -869,8 +952,8 @@
         "Shop stop: cracked drain fitting in the hull or stripped threads — get a yard repair before the next trip.",
       ],
       parts: [
-        part("drain-plugs", "Boat drain plugs (pair)", "Spare set so you’re never stuck at the ramp", "boat drain plugs"),
-        part("drain-orings", "Drain plug O-rings", "Fresh seals prevent leaks underway", "boat drain plug o-ring"),
+        part("drain-plugs", "Boat drain plugs (pair)", "Spare set so you’re never stuck at the ramp", "boat hull drain plugs"),
+        part("drain-orings", "Drain plug O-rings", "Fresh seals prevent leaks underway", "boat drain plug o-ring seal"),
       ],
     },
 
@@ -906,7 +989,7 @@
       ],
       parts: [
         part("bearing-grease", "Marine wheel bearing grease", "Water-resistant grease for hubs", "marine trailer wheel bearing grease"),
-        part("bearing-buddy", "Bearing Buddy / hub protector", "Keeps water out and grease in", "bearing buddy trailer"),
+        part("bearing-buddy", "Bearing Buddy / hub protector", "Keeps water out and grease in", "Bearing Buddy"),
         part("cotter-pins", "Axle cotter pins", "Secure the castle nut after service", "trailer axle cotter pins"),
       ],
     },
@@ -937,7 +1020,7 @@
       parts: [
         part("tire-gauge", "Digital tire pressure gauge", "Accurate cold PSI readings", "digital tire pressure gauge"),
         part("portable-inflator", "12V portable inflator", "Top off at the ramp or roadside", "12V portable tire inflator"),
-        part("valve-caps", "Metal valve stem caps", "Keep grit and moisture out of stems", "metal tire valve caps"),
+        part("valve-caps", "Metal valve stem caps", "Keep grit and moisture out of stems", "metal tire valve stem caps"),
       ],
     },
     "Lights & wiring": {
@@ -969,7 +1052,7 @@
       parts: [
         part("led-trailer-lights", "LED trailer light kit", "Brighter, longer-lasting markers/tails", "LED boat trailer light kit"),
         part("trailer-connector", "4/7-pin trailer connector", "Reliable plug to the tow vehicle", "trailer wiring connector 7 pin"),
-        part("dielectric-grease-lights", "Dielectric grease", "Keeps moisture out of bulb sockets", "dielectric grease"),
+        part("dielectric-grease-lights", "Dielectric grease", "Keeps moisture out of bulb sockets", "marine dielectric grease"),
       ],
     },
     "Winch & strap": {
@@ -999,9 +1082,9 @@
         "Shop stop: stand flexes under load, gears skip, or bow eye is damaged — repair before the next launch.",
       ],
       parts: [
-        part("winch-strap", "Trailer winch strap", "Replace worn webbing before it snaps", "boat trailer winch strap"),
-        part("winch-hook", "Winch hook / safety latch", "Secure connection to the bow eye", "boat winch hook latch"),
-        part("winch-lube", "Winch / gear lubricant", "Keeps gears smooth without gumming", "winch lubricant spray"),
+        part("winch-strap", "Trailer winch strap", "Replace worn webbing before it snaps", "boat trailer winch strap 2 inch"),
+        part("winch-hook", "Winch hook / safety latch", "Secure connection to the bow eye", "boat trailer winch hook latch"),
+        part("winch-lube", "Winch / gear lubricant", "Keeps gears smooth without gumming", "winch gear lubricant spray"),
       ],
     },
     "Coupler / safety chains": {
@@ -1031,9 +1114,9 @@
         "Shop stop: latch won’t stay closed, coupler cracked, or bolts keep loosening — replace the coupler assembly.",
       ],
       parts: [
-        part("coupler-lock", "Trailer coupler lock", "Theft deterrent and latch security", "trailer coupler lock"),
-        part("safety-chains", "Safety chains with hooks", "Required backup if coupler fails", "trailer safety chains"),
-        part("hitch-ball", "Hitch ball (correct size)", "Match coupler rating and diameter", "trailer hitch ball 2 inch"),
+        part("coupler-lock", "Trailer coupler lock", "Theft deterrent and latch security", "trailer coupler hitch lock"),
+        part("safety-chains", "Safety chains with hooks", "Required backup if coupler fails", "trailer safety chains with hooks"),
+        part("hitch-ball", "Hitch ball (correct size)", "Match coupler rating and diameter", "trailer hitch ball chrome"),
       ],
     },
     "Brakes (if applicable)": {
@@ -1069,9 +1152,9 @@
         "Shop stop: pulling to one side, leaking actuator, glazed/contaminated linings, or no breakaway function — brake tech before highway speeds.",
       ],
       parts: [
-        part("brake-pads", "Trailer brake pads / shoes", "Restore stopping power when worn", "boat trailer brake pads"),
+        part("brake-pads", "Trailer brake pads / shoes", "Restore stopping power when worn", "boat trailer brake pads shoes"),
         part("brake-fluid", "DOT brake fluid", "Hydraulic surge systems only — correct DOT type", "DOT 3 brake fluid"),
-        part("breakaway-kit", "Breakaway switch & battery", "Applies brakes if trailer separates", "trailer breakaway switch kit"),
+        part("breakaway-kit", "Breakaway switch & battery", "Applies brakes if trailer separates", "trailer breakaway switch battery kit"),
       ],
     },
     "Leaf springs / suspension": {
@@ -1104,7 +1187,7 @@
       parts: [
         part("u-bolts", "Axle U-bolt kit", "Clamps springs securely to the axle", "trailer axle u-bolt kit"),
         part("spring-bushings", "Leaf spring bushings", "Quiet, controlled spring movement", "trailer leaf spring bushings"),
-        part("grease-gun", "Grease gun cartridge", "Service suspension zerks", "grease gun cartridge marine"),
+        part("grease-gun", "Grease gun cartridge", "Service suspension zerks", "marine grease gun cartridge"),
       ],
     },
     "Wheel bearings service": {
@@ -1140,9 +1223,9 @@
         "Shop stop: roughness you can’t eliminate, spindle wear grooves, or repeated water intrusion — hub/axle specialist.",
       ],
       parts: [
-        part("bearing-kit", "Trailer bearing & race kit", "Matched inner/outer bearings for your axle", "boat trailer bearing kit"),
+        part("bearing-kit", "Trailer bearing & race kit", "Matched inner/outer bearings for your axle", "boat trailer bearing race kit"),
         part("hub-seal", "Hub grease seal", "Keeps grease in and water out", "trailer hub grease seal"),
-        part("bearing-grease-svc", "Marine wheel bearing grease", "Pack bearings for the season", "marine trailer bearing grease"),
+        part("bearing-grease-svc", "Marine wheel bearing grease", "Pack bearings for the season", "marine trailer wheel bearing grease"),
         part("bearing-pack-tool", "Bearing packer tool", "Packs grease through the cage evenly", "wheel bearing packer tool"),
       ],
     },
@@ -1880,7 +1963,7 @@
           <div class="part-why">${escapeHtml(p.why)}</div>
           ${fit ? `<div class="part-fit">${escapeHtml(fit)}</div>` : ""}
         </div>
-        <a class="btn btn-buy" href="${escapeAttr(buyUrlForPart(p, asset))}" target="_blank" rel="noopener noreferrer">Shop</a>
+        <a class="btn btn-buy" href="${escapeAttr(buyUrlForPart(p, asset))}" target="_blank" rel="noopener noreferrer">Shop Amazon</a>
       </div>`;
       })
       .join("");
@@ -2336,7 +2419,7 @@
                 ${fit ? `<div class="part-fit">${escapeHtml(fit)}</div>` : ""}
                 <div class="part-task">${escapeHtml(row.task.title)}</div>
               </div>
-              <a class="btn btn-buy" href="${escapeAttr(buyUrlForPart(row.part, a))}" target="_blank" rel="noopener noreferrer">Shop</a>
+              <a class="btn btn-buy" href="${escapeAttr(buyUrlForPart(row.part, a))}" target="_blank" rel="noopener noreferrer">Shop Amazon</a>
             </div>`;
             })
             .join("")}`;

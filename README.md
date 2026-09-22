@@ -54,7 +54,7 @@ Opening `public/index.html` via `file://` usually works (`localStorage` is fine)
 |--------|----------------|
 | **Track** | Stats + Overdue / Due soon (≤14 days) / Upcoming; one-tap **Done**; tap a task for detail |
 | **Guides** | All how-tos from seeded tasks; filter Boat / Trailer; opens task detail focused on steps |
-| **Parts** | Flat catalog of shop links grouped by asset; Amazon search URLs (affiliate-ready) |
+| **Parts** | Flat catalog of shop links grouped by asset; curated marine Amazon searches (`AMAZON_ASSOCIATE_TAG` when set) |
 | **More** | Assets + Settings |
 | **Task detail** | Schedule / last done / Mark done · How-to steps · Parts for this job with **Shop** |
 | **Log completion** | Bottom sheet: date, optional hours/miles/cost/notes |
@@ -82,8 +82,9 @@ Settings → **Export JSON**. **Import JSON** restores on the same or another br
 - Data is **per browser / device**. Clearing site data wipes it — export backups.
 - No cloud sync (MVP by design).
 - Day-based due dates drive the dashboard; optional hour intervals are stored for reference; logging hours/miles can update the asset meter.
-- Shop buttons are plain Amazon search links (structure ready for affiliate tags later).
-- Build id: `<meta name="bm-build" content="v1-product">`.
+- Shop buttons use curated marine Amazon search queries (gear-aware make/model when set).
+- Affiliate-ready: set `AMAZON_ASSOCIATE_TAG` in `app.js` when Amazon Associates is approved; empty tag keeps clean search URLs (no empty `tag=`).
+- Build id: `v1-shop-links` (see `BUILD` in `app.js`).
 
 ## License
 
