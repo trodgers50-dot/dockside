@@ -799,48 +799,185 @@ body {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px;
-  margin-bottom: 12px;
+  padding: 18px 16px 20px;
+  margin-bottom: 14px;
 }
 .howto-block.highlight {
   border-color: var(--teal-dim);
-  box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.2);
+  box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.25), 0 8px 28px rgba(0, 0, 0, 0.25);
 }
 .howto-block h3 {
-  font-size: 0.95rem;
-  margin-bottom: 12px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 14px;
   display: flex;
   align-items: center;
   gap: 8px;
+  letter-spacing: -0.01em;
 }
+.guide-kicker {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--teal);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 10px;
+}
+.guide-model-callout {
+  background: var(--teal-bg);
+  border: 1px solid rgba(45, 212, 191, 0.35);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-size: 0.84rem;
+  color: var(--text);
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+.guide-model-callout strong { color: var(--teal); }
+.guide-verify-banner {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.guide-sec-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.guide-sec-sub {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.guide-warnings {
+  background: var(--amber-bg);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.guide-warnings .guide-sec-title { color: var(--amber); }
+.guide-warnings ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.guide-warnings li {
+  font-size: 0.84rem;
+  color: var(--text);
+  line-height: 1.45;
+}
+.guide-tools { margin-bottom: 18px; }
+.tool-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tool-chip {
+  display: inline-block;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  color: var(--text);
+  line-height: 1.3;
+}
+.guide-torque { margin-bottom: 18px; }
+.torque-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.torque-head {
+  display: none;
+}
+.torque-row {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: grid;
+  gap: 6px;
+}
+.tq-part {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--text);
+}
+.tq-spec {
+  font-size: 0.84rem;
+  color: var(--teal);
+  line-height: 1.4;
+  font-weight: 600;
+}
+.tq-note {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.guide-steps-wrap { margin-bottom: 18px; }
 .howto-steps {
   list-style: none;
   counter-reset: step;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 .howto-steps li {
   counter-increment: step;
   display: flex;
-  gap: 12px;
-  font-size: 0.875rem;
+  gap: 14px;
+  font-size: 0.95rem;
   color: var(--text);
-  line-height: 1.45;
+  line-height: 1.55;
 }
 .howto-steps li::before {
   content: counter(step);
   flex-shrink: 0;
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   background: var(--teal-bg);
   color: var(--teal);
   font-weight: 700;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   display: grid;
   place-items: center;
-  margin-top: 1px;
+  margin-top: 2px;
+  border: 1px solid rgba(45, 212, 191, 0.3);
+}
+.guide-fluids {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+.guide-fluids ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.guide-fluids li {
+  font-size: 0.84rem;
+  color: var(--text);
+  line-height: 1.45;
+}
+.guide-empty {
+  font-size: 0.85rem;
+  color: var(--text-muted);
 }
 .safety-note {
   margin-top: 12px;
@@ -850,6 +987,10 @@ body {
   font-size: 0.78rem;
   color: var(--amber);
   line-height: 1.4;
+}
+.parts-block.shop-block h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
 }
 
 .parts-block {
